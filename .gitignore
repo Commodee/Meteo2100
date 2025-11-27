@@ -2,6 +2,9 @@
 .Rhistory
 .Rapp.history
 
+data/
+data_climat/
+
 # Session Data files
 .RData
 .RDataTmp

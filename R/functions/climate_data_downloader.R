@@ -1,3 +1,9 @@
+log_msg <- function(...,verbose=FALSE){
+  if (verbose){
+    cat(...)
+  }
+}
+
 #' Fonction Principale Optimisée RAM avec Mode Light
 download_meteo_multi_parquet <- function(departements,
                                          mode = "full",

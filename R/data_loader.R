@@ -8,7 +8,6 @@ load_raw_data <- function() {
   #france_communes <- st_read(url_communes, quiet = TRUE)
   
   dossier_parquet <- "../data/meteo_parquet"
-  # Liste de vos départements
   liste_depts <- c("01", "02", "03", "04", "05", "06", "07", "08", "09", "10",
                        "11", "12", "13", "14", "15", "16", "17", "18", "19", "21",
                        "22", "23", "24", "25", "26", "27", "28", "29", "2A", "2B",
@@ -19,7 +18,9 @@ load_raw_data <- function() {
                        "70", "71", "72", "73", "74", "75", "76", "77", "78", "79",
                        "80", "81", "82", "83", "84", "85", "86", "87", "88", "89",
                        "90", "91", "92", "93", "94", "95","971", "972", "973", "974", "976")
-  download_meteo_multi_parquet(liste_depts,output_dir = dossier_parquet, mode = "light")
+  
+  # download_meteo_multi_parquet(liste_depts,output_dir = dossier_parquet, mode = "full")
+  
   
   
   data_meteo_arrow <- arrow::open_dataset(dossier_parquet)

@@ -26,7 +26,7 @@ plot_temp <- function(data,
     "Tout"            = "Temperature_moyenne"
   )
   
-  p <- ggplot(data_mieux, aes(x = periode))
+  p <- ggplot(data_mieux, aes(x = periode, y = .data[[colonne_y]]))
   
   if (temp_choix == "Tout") {
     p <- p + geom_ribbon(
@@ -36,19 +36,15 @@ plot_temp <- function(data,
     )
   } else if (granularite_temps == "annee") {
     p <- p + geom_smooth(
-      aes(y = .data[[colonne_y]]),
       color = "#e74c3c",
       fill  = "#f58f3c",
       alpha = 0.1,
       linewidth = 1,
       linetype = "dotted",
-      method = mgcv::gam(y ~ s(x, bs="cs")),
       se = TRUE
     )
   }
-  p <- p + geom_line(aes(y = .data[[colonne_y]]),
-                     color = "#2980b9",
-                     linewidth = 1.2)
+  p <- p + geom_line(color = "#2980b9", linewidth = 1.2)
   
   p <- p +  theme_minimal(base_size = 14) +
     labs(

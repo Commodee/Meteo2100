@@ -1,11 +1,14 @@
-aggregate_meteo <- function(data, granularite_temps = "mois", niveau_geo = "france", choix_geo = NULL) {
-  
+aggregate_meteo <- function(data,
+                            granularite_temps = "mois",
+                            niveau_geo = "france",
+                            choix_geo = NULL) {
   # Mapping simple
-  col_geo <- switch(niveau_geo,
-                    "Communale"      = "NOM_USUEL",
-                    "Départementale" = "NOM_DEPT",
-                    "Régionale"      = "NOM_REGION",
-                    "Nationale"      = NA_character_
+  col_geo <- switch(
+    niveau_geo,
+    "Communale"      = "NOM_USUEL",
+    "Départementale" = "NOM_DEPT",
+    "Régionale"      = "NOM_REGION",
+    "Nationale"      = NA_character_
   )
   
   # 1. Filtrage (Avant le collect)
@@ -35,7 +38,8 @@ aggregate_meteo <- function(data, granularite_temps = "mois", niveau_geo = "fran
   
   # 3. Group by & Summarise
   group_vars <- "periode"
-  if (!is.na(col_geo)) group_vars <- c(group_vars, col_geo)
+  if (!is.na(col_geo))
+    group_vars <- c(group_vars, col_geo)
   
   result <- data %>%
     group_by(across(all_of(group_vars))) %>%
@@ -43,7 +47,7 @@ aggregate_meteo <- function(data, granularite_temps = "mois", niveau_geo = "fran
       Temperature_moyenne = mean(TM, na.rm = TRUE),
       Temperature_min     = mean(TN, na.rm = TRUE),
       Temperature_max     = mean(TX, na.rm = TRUE),
-      Precipitation_mm_moy = mean(RR, na.rm = TRUE), 
+      Precipitation_mm_moy = mean(RR, na.rm = TRUE),
       nb_observations      = n(),
       .groups = "drop"
     ) %>%

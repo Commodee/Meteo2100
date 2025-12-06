@@ -310,6 +310,97 @@ server <- function(input, output, session) {
   })
   
   # ---- Tab Demain ----
+  # 1. Chargement des données DRIAS (s'exécute une seule fois au lancement)
+  drias_data <- reactive({
+    load_drias_projections()
+  })
+  
+  # 2. Description dynamique du scénario sélectionné
+  output$desc_scenario <- renderText({
+    switch(input$scenario_giec,
+           "rcp26" = "🟢 Scénario Optimiste (Accord de Paris) : Fortes réductions d'émissions. La température se stabilise vers 2050.",
+           "rcp45" = "🟠 Scénario Intermédiaire : Les émissions plafonnent vers 2040. Le réchauffement ralentit mais continue.",
+           "rcp85" = "🔴 Scénario Pessimiste : Aucune régulation ('Business as Usual'). Hausse brutale et continue des températures."
+    )
+  })
+  
+  # 3. Le Graphique de Projection
+  output$plot_projection <- renderPlot({
+    req(input$demain_region)
+    
+    # --- A. Données Historiques (Météo-France) ---
+    data_hist <- global_data$meteo %>%
+      filter(NOM_REGION == input$demain_region) %>%
+      mutate(annee = year(DATE)) %>%
+      group_by(annee) %>%
+      summarise(temp_moy = mean(TM, na.rm = TRUE), .groups = "drop") %>%
+      collect() %>%
+      mutate(scenario = "Historique")
+    
+    # --- B. Données de Projection (DRIAS) ---
+    data_proj_all <- drias_data() %>%
+      filter(annee <= input$horizon_annee)
+    
+    # --- C. Construction du Graphique ---
+    p <- ggplot() +
+      
+      # 1. Courbe Historique (Trait Noir épais)
+      geom_line(data = data_hist, aes(x = annee, y = temp_moy, color = "Historique"), size = 1.2) +
+      
+      # 2. Toutes les Projections en fond (Pointillés discrets)
+      # Cela permet de comparer le scénario choisi aux autres
+      geom_line(data = data_proj_all, 
+                aes(x = annee, y = temp_moy, color = scenario, group = scenario), 
+                linetype = "dashed", size = 0.8, alpha = 0.5)
+    
+    # 3. Mise en valeur du Scénario sélectionné (Ruban + Trait plein)
+    data_selected <- data_proj_all %>% filter(scenario == input$scenario_giec)
+    
+    if (nrow(data_selected) > 0) {
+      p <- p +
+        # Ruban d'incertitude (Zone colorée)
+        geom_ribbon(data = data_selected,
+                    aes(x = annee, ymin = temp_min, ymax = temp_max, fill = scenario),
+                    alpha = 0.3) +
+        # La courbe principale du scénario choisi (plus épaisse)
+        geom_line(data = data_selected,
+                  aes(x = annee, y = temp_moy, color = scenario),
+                  size = 1.5)
+    }
+    
+    # --- D. Design et Couleurs ---
+    p +
+      # Définition manuelle des couleurs pour respecter les codes du GIEC
+      scale_color_manual(values = c(
+        "Historique" = "#2c3e50", # Gris foncé
+        "rcp26"      = "#2ecc71", # Vert
+        "rcp45"      = "#f39c12", # Orange
+        "rcp85"      = "#e74c3c"  # Rouge
+      )) +
+      scale_fill_manual(values = c(
+        "rcp26" = "#2ecc71",
+        "rcp45" = "#f39c12",
+        "rcp85" = "#e74c3c"
+      )) +
+      # Ligne verticale "Aujourd'hui"
+      geom_vline(xintercept = 2024, linetype = "dotted", color = "gray50") +
+      annotate("text", x = 2024, y = min(data_hist$temp_moy, na.rm=TRUE), 
+               label = "Aujourd'hui", vjust = -0.5, angle = 90, size = 3, color = "gray50") +
+      
+      theme_minimal(base_size = 14) +
+      labs(
+        title = paste("Trajectoire climatique :", input$demain_region),
+        subtitle = "Confrontation Historique vs Projections du GIEC",
+        y = "Température Moyenne (°C)",
+        x = NULL,
+        color = "Scénarios",
+        fill = "Incertitude"
+      ) +
+      theme(
+        legend.position = "bottom",
+        plot.title = element_text(face = "bold", color = "#2c3e50")
+      )
+  })
     
 }
 

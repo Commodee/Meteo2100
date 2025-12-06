@@ -81,7 +81,7 @@ ui <- fluidPage(
             choices = c("Jour" = "jour", 
                         "Mois" = "mois", 
                         "Année" = "annee"),
-            selected = "mois"
+            selected = "annee"
           ),
           uiOutput("date_range_ui")
         ), # sidebarPanel
@@ -142,7 +142,7 @@ server <- function(input, output, session) {
         inputId = "situation_temp_choix",
         label = "Quelle temperature ?",
         choices = c("Temperature max", "Temperature min", "Temperature moy", "Tout"),
-        selected = "Tout"
+        selected = "Temperature moy"
       )
     } else {
       NULL
@@ -163,7 +163,7 @@ server <- function(input, output, session) {
         view = "years",
         minView = "years",
         dateFormat = "yyyy",
-        value = c("1990-01-01", "2023-12-31")
+        value = c("1950-01-01", "2025-12-31")
       )
       
     } else if (input$situation_tempo == "mois") {

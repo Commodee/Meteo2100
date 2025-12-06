@@ -34,10 +34,18 @@ plot_temp <- function(data,
       fill = "#3498db",
       alpha = 0.2
     )
-  } else {
-    p <- p + geom_smooth(aes(fill="red"))
+  } else if (granularite_temps == "annee") {
+    p <- p + geom_smooth(
+      aes(y = .data[[colonne_y]]),
+      color = "#e74c3c",
+      fill  = "#f58f3c",
+      alpha = 0.1,
+      linewidth = 1,
+      linetype = "dotted",
+      method = mgcv::gam(y ~ s(x, bs="cs")),
+      se = TRUE
+    )
   }
-  
   p <- p + geom_line(aes(y = .data[[colonne_y]]),
                      color = "#2980b9",
                      linewidth = 1.2)

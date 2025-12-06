@@ -1,7 +1,6 @@
 # load libraries ----------------------------------------------------------
 library(arrow)
 library(httr)
-library(jsonlite)
 library(sf)
 library(shiny)
 library(shinyWidgets)
@@ -24,16 +23,22 @@ global_data <- load_raw_data()
 
 # process data ------------------------------------------------------------
 vec_dep <- global_data$meteo %>% 
-  distinct(NOM_DEPT) %>% 
+  select(NOM_DEPT, CODE_DEPT) %>% 
+  distinct(NOM_DEPT, CODE_DEPT) %>%
   collect() %>%
+  arrange(CODE_DEPT) %>%
   pull(NOM_DEPT)
-# Pour les régions
+
 vec_region <- global_data$meteo %>% 
+  arrange(NOM_REGION) %>% 
+  select(NOM_REGION) %>% 
   distinct(NOM_REGION) %>%
   collect() %>%
   pull(NOM_REGION)
 
-vec_commune <- global_data$meteo %>%
+vec_commune <- global_data$meteo %>% 
+  arrange(NOM_USUEL) %>% 
+  select(NOM_USUEL) %>%
   distinct(NOM_USUEL) %>%
   collect() %>%
   pull(NOM_USUEL)
@@ -50,7 +55,16 @@ ui <- fluidPage(
       "Où en est on ?",
       sidebarLayout(
         sidebarPanel(
+          width = 3,
           h1("Sidebar"),
+          radioButtons(
+            inputId = "situation_plot",
+            label = "On affiche quoi ?",
+            choices = c("Temperature", "Precipitation"),
+            selected = "Temperature"
+          ),
+          uiOutput("situation_temp_choix"),
+          hr(),
           radioButtons(
             inputId = "situation_gran",
             label = "Granularité",
@@ -67,15 +81,16 @@ ui <- fluidPage(
             choices = c("Jour" = "jour", 
                         "Mois" = "mois", 
                         "Année" = "annee"),
-            selected = "mois"
+            selected = "annee"
           ),
           uiOutput("date_range_ui")
         ), # sidebarPanel
         
         mainPanel(
+          width = 9,
           h1("Graphs et indicateurs"),
           textOutput("text"),
-          plotOutput("plot1")
+          plotOutput("plot1", height = "600px")
         ) # mainPanel
       ) # sidebarLayout
     ), # tab_situation
@@ -168,15 +183,17 @@ server <- function(input, output, session) {
     )
   })
   
-  # Texte qui affiche la sélection
-  output$text <- renderText({
-    req(input$situation_gran)
-    switch(input$situation_gran,
-           "Communale" = input$situation_commune,
-           "Départementale" = input$situation_dep,
-           "Régionale" = input$situation_reg,
-           "Nationale" = "France entière"
-    )
+  output$situation_temp_choix <- renderUI({
+    if (input$situation_plot == "Temperature") {
+      radioButtons(
+        inputId = "situation_temp_choix",
+        label = "Quelle temperature ?",
+        choices = c("Temperature max", "Temperature min", "Temperature moy", "Tout"),
+        selected = "Temperature moy"
+      )
+    } else {
+      NULL
+    }
   })
   
   # Selcteur de date
@@ -193,7 +210,7 @@ server <- function(input, output, session) {
         view = "years",
         minView = "years",
         dateFormat = "yyyy",
-        value = c("1990-01-01", "2023-12-31")
+        value = c("1950-01-01", "2025-12-31")
       )
       
     } else if (input$situation_tempo == "mois") {
@@ -250,20 +267,35 @@ server <- function(input, output, session) {
     # --- 2. FILTRAGE DES DONNÉES ---
     # On filtre les données Arrow AVANT de les envoyer au plot
     # Cela rend l'appli beaucoup plus rapide
+    date_debut <- input$plage_dates[1]
+    date_fin   <- input$plage_dates[2]
+    
+    if (input$situation_tempo == "annee") {
+      date_fin <- as.Date(paste0(year(date_fin), "-12-31"))
+    }
     
     data_filtree <- global_data$meteo %>%
       filter(
-        DATE >= input$plage_dates[1],
-        DATE <= input$plage_dates[2]
+        DATE >= date_debut,
+        DATE <= date_fin
       )
     
     # --- 3. GÉNÉRATION DU GRAPHIQUE ---
-    switch(input$situation_gran,
-           "Communale"       = plotplot(data_filtree, "Communale", input$situation_commune, input$situation_tempo),
-           "Départementale"  = plotplot(data_filtree, "Départementale", input$situation_dep, input$situation_tempo),
-           "Régionale"       = plotplot(data_filtree, "Régionale", input$situation_reg, input$situation_tempo),
-           "Nationale"       = plotplot(data_filtree, "Nationale", NA, input$situation_tempo)
-    )
+    if(input$situation_plot == "Temperature"){
+      switch(input$situation_gran,
+             "Communale"       = plot_temp(data_filtree, "Communale", input$situation_commune, input$situation_tempo, input$situation_temp_choix),
+             "Départementale"  = plot_temp(data_filtree, "Départementale", input$situation_dep, input$situation_tempo, input$situation_temp_choix),
+             "Régionale"       = plot_temp(data_filtree, "Régionale", input$situation_reg, input$situation_tempo, input$situation_temp_choix),
+             "Nationale"       = plot_temp(data_filtree, "Nationale", NA, input$situation_tempo, input$situation_temp_choix)
+      )
+    }else if(input$situation_plot == "Precipitation"){
+      switch(input$situation_gran,
+             "Communale"       = plot_prec(data_filtree, "Communale", input$situation_commune, input$situation_tempo),
+             "Départementale"  = plot_prec(data_filtree, "Départementale", input$situation_dep, input$situation_tempo),
+             "Régionale"       = plot_prec(data_filtree, "Régionale", input$situation_reg, input$situation_tempo),
+             "Nationale"       = plot_prec(data_filtree, "Nationale", NA, input$situation_tempo)
+      )
+    }
   })
   
   

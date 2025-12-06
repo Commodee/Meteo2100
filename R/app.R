@@ -430,7 +430,7 @@ server <- function(input, output, session) {
       
       # Étiquette de fin de courbe
       val_fin <- tail(data_selected, 1)
-      p <- p + geom_label(data = val_fin, aes(x = annee, y = temp_max, label = paste0("+", round(val_fin$temp_moy - ref_region, 1), "°C")), 
+      p <- p + geom_label(data = val_fin, aes(x = annee, y = temp_max, label = paste0("+", round(temp_moy - ref_region, 1), "°C")), 
                           vjust = -0.5, size = 3, fontface = "bold", show.legend = FALSE)
     }
     

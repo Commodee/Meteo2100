@@ -34,6 +34,8 @@ plot_temp <- function(data,
       fill = "#3498db",
       alpha = 0.2
     )
+  } else {
+    p <- p + geom_smooth(aes(fill="red"))
   }
   
   p <- p + geom_line(aes(y = .data[[colonne_y]]),

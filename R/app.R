@@ -220,12 +220,17 @@ server <- function(input, output, session) {
     # --- 2. FILTRAGE DES DONNÉES ---
     # On filtre les données Arrow AVANT de les envoyer au plot
     # Cela rend l'appli beaucoup plus rapide
-    cat(input$plage_dates[1],"\n")
-    cat(input$plage_dates[2],"\n")
+    date_debut <- input$plage_dates[1]
+    date_fin   <- input$plage_dates[2]
+    
+    if (input$situation_tempo == "annee") {
+      date_fin <- as.Date(paste0(year(date_fin), "-12-31"))
+    }
+    
     data_filtree <- global_data$meteo %>%
       filter(
-        DATE >= input$plage_dates[1],
-        DATE <= input$plage_dates[2]
+        DATE >= date_debut,
+        DATE <= date_fin
       )
     
     # --- 3. GÉNÉRATION DU GRAPHIQUE ---

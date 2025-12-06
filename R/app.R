@@ -325,11 +325,12 @@ server <- function(input, output, session) {
     )
   })
   
-  # 3. Le Graphique de Projection
+  # 3. Le Graphique de Projection (AVEC DÉCALAGE RÉGIONAL)
   output$plot_projection <- renderPlot({
     req(input$demain_region)
     
-    # --- A. Données Historiques (Météo-France) ---
+    # --- A. Données Historiques (Réalité Locale) ---
+    # On récupère toute l'histoire disponible pour cette région
     data_hist <- global_data$meteo %>%
       filter(NOM_REGION == input$demain_region) %>%
       mutate(annee = year(DATE)) %>%
@@ -338,67 +339,83 @@ server <- function(input, output, session) {
       collect() %>%
       mutate(scenario = "Historique")
     
-    # --- B. Données de Projection (DRIAS) ---
-    data_proj_all <- drias_data() %>%
-      filter(annee <= input$horizon_annee)
+    # --- B. Données DRIAS (Modèle National) ---
+    raw_proj <- drias_data()
+    validate(need(!is.null(raw_proj), "Chargement DRIAS échoué."))
     
-    # --- C. Construction du Graphique (Mode Horizons) ---
-    p <- ggplot() +
-      # Historique réel (Ligne noire fine)
-      geom_line(data = data_hist, aes(x = annee, y = temp_moy, color = "Historique"), size = 1, alpha = 0.6) +
-      
-      # Projections "Fantômes" (Pointillés)
-      geom_line(data = data_proj_all, aes(x = annee, y = temp_moy, color = scenario, group = scenario), 
-                linetype = "dashed", size = 0.8, alpha = 0.4) +
-      # AJOUT : Des points pour marquer les horizons
-      geom_point(data = data_proj_all, aes(x = annee, y = temp_moy, color = scenario), size = 2, alpha = 0.4)
+    # --- C. CALCUL DU DÉCALAGE (Le Delta) ---
+    # 1. On cherche la température moyenne de la région dans le passé (référence)
+    # On essaie de viser la période 1976-2005 si on a les données, sinon on prend tout ce qu'on a
+    ref_region <- data_hist %>%
+      filter(annee >= 1976, annee <= 2005) %>%
+      summarise(m = mean(temp_moy, na.rm = TRUE)) %>%
+      pull(m)
     
-    data_selected <- data_proj_all %>% filter(scenario == input$scenario_giec)
-    
-    if (nrow(data_selected) > 0) {
-      p <- p +
-        # Ruban
-        geom_ribbon(data = data_selected, aes(x = annee, ymin = temp_min, ymax = temp_max, fill = scenario), alpha = 0.2) +
-        # Courbe lissée ou droite
-        geom_line(data = data_selected, aes(x = annee, y = temp_moy, color = scenario), size = 1.5) +
-        # Gros points pour le scénario choisi
-        geom_point(data = data_selected, aes(x = annee, y = temp_moy, color = scenario), size = 4) +
-        # Étiquettes de texte (optionnel mais classe)
-        geom_text(data = data_selected, aes(x = annee, y = temp_max + 0.5, label = round(temp_moy, 1)), 
-                  color = "#2c3e50", fontface = "bold", size = 4)
+    # Si on n'a pas assez de vieux historique (ex: mode Light), on prend la moyenne globale dispo
+    if (is.na(ref_region) || is.nan(ref_region)) {
+      ref_region <- mean(data_hist$temp_moy, na.rm = TRUE)
     }
     
-    # --- D. Design et Couleurs ---
-    p +
-      # Définition manuelle des couleurs pour respecter les codes du GIEC
-      scale_color_manual(values = c(
-        "Historique" = "#2c3e50", # Gris foncé
-        "rcp26"      = "#2ecc71", # Vert
-        "rcp45"      = "#f39c12", # Orange
-        "rcp85"      = "#e74c3c"  # Rouge
-      )) +
-      scale_fill_manual(values = c(
-        "rcp26" = "#2ecc71",
-        "rcp45" = "#f39c12",
-        "rcp85" = "#e74c3c"
-      )) +
-      # Ligne verticale "Aujourd'hui"
-      geom_vline(xintercept = 2024, linetype = "dotted", color = "gray50") +
-      annotate("text", x = 2024, y = min(data_hist$temp_moy, na.rm=TRUE), 
-               label = "Aujourd'hui", vjust = -0.5, angle = 90, size = 3, color = "gray50") +
+    # 2. On cherche la référence dans le fichier DRIAS (c'est le point 1990)
+    ref_drias <- raw_proj %>%
+      filter(annee == 1990) %>%
+      summarise(m = mean(temp_moy, na.rm = TRUE)) %>%
+      pull(m)
+    
+    # 3. Le Delta : De combien faut-il monter/descendre la courbe ?
+    # Si Region (15°C) - Drias (12°C) = +3°C d'ajustement
+    offset <- ref_region - ref_drias
+    
+    # Sécurité si calcul impossible
+    if (is.na(offset)) offset <- 0
+    
+    # --- D. APPLICATION DU DÉCALAGE ---
+    data_proj_shifted <- raw_proj %>%
+      mutate(
+        temp_moy = temp_moy + offset,
+        temp_min = temp_min + offset,
+        temp_max = temp_max + offset
+      )
+    
+    # On sépare pour l'affichage
+    data_proj_fond <- data_proj_shifted # Pour les pointillés
+    
+    data_selected <- data_proj_shifted %>% 
+      filter(scenario == input$scenario_giec, annee <= input$horizon_annee)
+    
+    # --- E. GRAPHIQUE ---
+    p <- ggplot() +
+      # Historique
+      geom_line(data = data_hist, aes(x = annee, y = temp_moy, color = "Historique"), size = 1, alpha = 0.8) +
       
+      # Lignes de fond (Pointillés ajustés à la région)
+      geom_line(data = data_proj_fond, aes(x = annee, y = temp_moy, color = scenario, group = scenario), 
+                linetype = "dashed", alpha = 0.4) +
+      geom_point(data = data_proj_fond, aes(x = annee, y = temp_moy, color = scenario), size = 2, alpha = 0.4)
+    
+    if (nrow(data_selected) > 0) {
+      if (nrow(data_selected) > 1) {
+        p <- p +
+          geom_ribbon(data = data_selected, aes(x = annee, ymin = temp_min, ymax = temp_max, fill = scenario), alpha = 0.2) +
+          geom_line(data = data_selected, aes(x = annee, y = temp_moy, color = scenario), size = 1.5)
+      }
+      p <- p + geom_point(data = data_selected, aes(x = annee, y = temp_moy, color = scenario), size = 4)
+      
+      # Petit texte pour afficher la température en 2085
+      val_fin <- tail(data_selected, 1)
+      p <- p + geom_label(data = val_fin, aes(x = annee, y = temp_max, label = paste0("+", round(val_fin$temp_moy - ref_region, 1), "°C")), 
+                          vjust = -0.5, size = 3, fontface = "bold", show.legend = FALSE)
+    }
+    
+    p +
+      scale_color_manual(values = c("Historique" = "#2c3e50", "rcp26" = "#2ecc71", "rcp45" = "#f39c12", "rcp85" = "#e74c3c")) +
+      scale_fill_manual(values = c("rcp26" = "#2ecc71", "rcp45" = "#f39c12", "rcp85" = "#e74c3c")) +
+      geom_vline(xintercept = 2024, linetype = "dotted", color = "gray50") +
       theme_minimal(base_size = 14) +
       labs(
-        title = paste("Trajectoire climatique :", input$demain_region),
-        subtitle = "Confrontation Historique vs Projections du GIEC",
-        y = "Température Moyenne (°C)",
-        x = NULL,
-        color = "Scénarios",
-        fill = "Incertitude"
-      ) +
-      theme(
-        legend.position = "bottom",
-        plot.title = element_text(face = "bold", color = "#2c3e50")
+        title = paste("Trajectoire pour :", input$demain_region),
+        subtitle = paste("Ajustement local de", round(offset, 1), "°C par rapport au modèle national"),
+        y = "Température Moyenne (°C)", x = NULL
       )
   })
     

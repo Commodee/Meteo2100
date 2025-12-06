@@ -1,6 +1,7 @@
 # load libraries ----------------------------------------------------------
 library(arrow)
 library(httr)
+library(leaflet)
 library(sf)
 library(shiny)
 library(shinyWidgets)
@@ -105,14 +106,14 @@ ui <- fluidPage(
           radioButtons(
             inputId = "carte_ratio",
             label = "Granularité",
-            choices = c("Nationale", "Régionale", "Départementale", "Station Météo"),
-            selected = "Nationale"
+            choices = c("Régionale", "Départementale"),
+            selected = "Régionale"
           ),
-          uiOutput("carte_gran_ui")  # Corrigé : uiOutput au lieu de output
         ), # sidebarPanel
         
         mainPanel(
-          h1("Carte")
+          h1("Carte"),
+          leafletOutput("carte_interactive", height = "80vh")
         ) # mainPanel
       ) # sidebarLayout
     ), # tab_carte
@@ -253,15 +254,32 @@ server <- function(input, output, session) {
   
   
   # ---- Tab Carte ----
-  output$carte_gran_ui <- renderUI({
-    switch(input$carte_ratio,
-           "Communale" = selectInput("carte_commune", "Choisir la commune", vec_commune),
-           "Départementale" = selectInput("carte_dep", "Choisir le département", vec_dep),
-           "Régionale" = selectInput("carte_reg", "Choisir la région", vec_region),
-           "Nationale" = NULL
-    )
+  output$carte_interactive <- renderLeaflet({
+    data_map <- if (input$carte_ratio == "Départementale") {
+      global_data$departements
+    } else {
+      global_data$regions
+    }
+    
+    leaflet(data_map) %>%
+      #addTiles() %>%
+      addPolygons(
+        fillColor = "white",
+        color = "#2c3e50",    # Couleur des bordures
+        weight = 1,           # Epaisseur du trait
+        opacity = 1,
+        fillOpacity = 0.4,    # Transparence du fond
+        label = ~nom,         # Affiche le nom de la région/dept au survol
+        highlightOptions = highlightOptions(
+          weight = 3,
+          color = "#e74c3c",
+          fillOpacity = 0.7,
+          bringToFront = TRUE
+        )
+      ) %>%
+      # Centre la vue sur la France par défaut
+      setView(lng = 2.2137, lat = 46.2276, zoom = 6)
   })
-  
   # ---- Tab Demain ----
 }
 

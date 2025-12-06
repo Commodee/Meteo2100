@@ -104,10 +104,57 @@ ui <- fluidPage(
     
     # tab_demain
     tabPanel(
-      "Et demain ?"
-    ) # tab_demain
-  ) # tabsetPanel
-) # fluidPage
+      "Et demain ?",
+      sidebarLayout(
+        sidebarPanel(
+          h3("Projections 2100"),
+          p("Simulez l'avenir selon les différents scénarios du GIEC."),
+          
+          # Choix géographique 
+          selectInput(
+            inputId = "demain_region",
+            label = "Choisir la région :",
+            choices = vec_region, 
+            selected = "Île-de-France"
+          ),
+          
+          hr(),
+          
+          # Choix du Scénario (Le cœur du sujet)
+          radioButtons(
+            inputId = "scenario_giec",
+            label = "Scénario d'émissions (GIEC) :",
+            choices = c(
+              "Optimiste (RCP 2.6) - Accord de Paris" = "rcp26",
+              "Intermédiaire (RCP 4.5) - Politique actuelle" = "rcp45",
+              "Pessimiste (RCP 8.5) - 'Business as usual'" = "rcp85"
+            ),
+            selected = "rcp45"
+          ),
+          
+          # Horizon temporel
+          sliderInput(
+            inputId = "horizon_annee",
+            label = "Jusqu'à quelle année ?",
+            min = 2024, 
+            max = 2100, 
+            value = 2050,
+            sep = ""
+          )
+        ),
+        
+        mainPanel(
+          h2("Trajectoire de température"),
+          plotOutput("plot_projection"),
+          br(),
+          wellPanel(
+            h4("Détails du scénario"),
+            textOutput("desc_scenario")
+          )
+        )
+      )
+    ),
+))
 
 # server ------------------------------------------------------------------
 server <- function(input, output, session) {
@@ -231,6 +278,7 @@ server <- function(input, output, session) {
   })
   
   # ---- Tab Demain ----
+    
 }
 
 # app ---------------------------------------------------------------------

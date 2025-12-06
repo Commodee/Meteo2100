@@ -5,6 +5,8 @@ data_climat/
 .Rhistory
 .Rapp.history
 
+*.Rproj
+
 data/
 data_climat/
 

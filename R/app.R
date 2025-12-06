@@ -1,7 +1,6 @@
 # load libraries ----------------------------------------------------------
 library(arrow)
 library(httr)
-library(jsonlite)
 library(sf)
 library(shiny)
 library(shinyWidgets)
@@ -24,16 +23,22 @@ global_data <- load_raw_data()
 
 # process data ------------------------------------------------------------
 vec_dep <- global_data$meteo %>% 
-  distinct(NOM_DEPT) %>% 
+  select(NOM_DEPT, CODE_DEPT) %>% 
+  distinct(NOM_DEPT, CODE_DEPT) %>%
   collect() %>%
+  arrange(CODE_DEPT) %>%
   pull(NOM_DEPT)
-# Pour les régions
+
 vec_region <- global_data$meteo %>% 
+  arrange(NOM_REGION) %>% 
+  select(NOM_REGION) %>% 
   distinct(NOM_REGION) %>%
   collect() %>%
   pull(NOM_REGION)
 
-vec_commune <- global_data$meteo %>%
+vec_commune <- global_data$meteo %>% 
+  arrange(NOM_USUEL) %>% 
+  select(NOM_USUEL) %>%
   distinct(NOM_USUEL) %>%
   collect() %>%
   pull(NOM_USUEL)
@@ -50,7 +55,15 @@ ui <- fluidPage(
       "Où en est on ?",
       sidebarLayout(
         sidebarPanel(
+          width = 3,
           h1("Sidebar"),
+          radioButtons(
+            inputId = "situation_plot",
+            label = "On affiche quoi ?",
+            choices = c("Temperature", "Precipitation"),
+            selected = "Temperature"
+          ),
+          hr(),
           radioButtons(
             inputId = "situation_gran",
             label = "Granularité",
@@ -73,9 +86,10 @@ ui <- fluidPage(
         ), # sidebarPanel
         
         mainPanel(
+          width = 9,
           h1("Graphs et indicateurs"),
           textOutput("text"),
-          plotOutput("plot1")
+          plotOutput("plot1", height = "600px")
         ) # mainPanel
       ) # sidebarLayout
     ), # tab_situation
@@ -121,16 +135,6 @@ server <- function(input, output, session) {
     )
   })
   
-  # Texte qui affiche la sélection
-  output$text <- renderText({
-    req(input$situation_gran)
-    switch(input$situation_gran,
-           "Communale" = input$situation_commune,
-           "Départementale" = input$situation_dep,
-           "Régionale" = input$situation_reg,
-           "Nationale" = "France entière"
-    )
-  })
   
   # Selcteur de date
   output$date_range_ui <- renderUI({
@@ -211,12 +215,21 @@ server <- function(input, output, session) {
       )
     
     # --- 3. GÉNÉRATION DU GRAPHIQUE ---
-    switch(input$situation_gran,
-           "Communale"       = plotplot(data_filtree, "Communale", input$situation_commune, input$situation_tempo),
-           "Départementale"  = plotplot(data_filtree, "Départementale", input$situation_dep, input$situation_tempo),
-           "Régionale"       = plotplot(data_filtree, "Régionale", input$situation_reg, input$situation_tempo),
-           "Nationale"       = plotplot(data_filtree, "Nationale", NA, input$situation_tempo)
-    )
+    if(input$situation_plot == "Temperature"){
+      switch(input$situation_gran,
+             "Communale"       = plot_temp(data_filtree, "Communale", input$situation_commune, input$situation_tempo),
+             "Départementale"  = plot_temp(data_filtree, "Départementale", input$situation_dep, input$situation_tempo),
+             "Régionale"       = plot_temp(data_filtree, "Régionale", input$situation_reg, input$situation_tempo),
+             "Nationale"       = plot_temp(data_filtree, "Nationale", NA, input$situation_tempo)
+      )
+    }else if(input$situation_plot == "Precipitation"){
+      switch(input$situation_gran,
+             "Communale"       = plot_prec(data_filtree, "Communale", input$situation_commune, input$situation_tempo),
+             "Départementale"  = plot_prec(data_filtree, "Départementale", input$situation_dep, input$situation_tempo),
+             "Régionale"       = plot_prec(data_filtree, "Régionale", input$situation_reg, input$situation_tempo),
+             "Nationale"       = plot_prec(data_filtree, "Nationale", NA, input$situation_tempo)
+      )
+    }
   })
   
   

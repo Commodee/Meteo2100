@@ -63,6 +63,7 @@ ui <- fluidPage(
             choices = c("Temperature", "Precipitation"),
             selected = "Temperature"
           ),
+          uiOutput("situation_temp_choix"),
           hr(),
           radioButtons(
             inputId = "situation_gran",
@@ -135,6 +136,18 @@ server <- function(input, output, session) {
     )
   })
   
+  output$situation_temp_choix <- renderUI({
+    if (input$situation_plot == "Temperature") {
+      radioButtons(
+        inputId = "situation_temp_choix",
+        label = "Quelle temperature ?",
+        choices = c("Temperature max", "Temperature min", "Temperature moy", "Tout"),
+        selected = "Tout"
+      )
+    } else {
+      NULL
+    }
+  })
   
   # Selcteur de date
   output$date_range_ui <- renderUI({
@@ -207,7 +220,8 @@ server <- function(input, output, session) {
     # --- 2. FILTRAGE DES DONNÉES ---
     # On filtre les données Arrow AVANT de les envoyer au plot
     # Cela rend l'appli beaucoup plus rapide
-    
+    cat(input$plage_dates[1],"\n")
+    cat(input$plage_dates[2],"\n")
     data_filtree <- global_data$meteo %>%
       filter(
         DATE >= input$plage_dates[1],
@@ -217,10 +231,10 @@ server <- function(input, output, session) {
     # --- 3. GÉNÉRATION DU GRAPHIQUE ---
     if(input$situation_plot == "Temperature"){
       switch(input$situation_gran,
-             "Communale"       = plot_temp(data_filtree, "Communale", input$situation_commune, input$situation_tempo),
-             "Départementale"  = plot_temp(data_filtree, "Départementale", input$situation_dep, input$situation_tempo),
-             "Régionale"       = plot_temp(data_filtree, "Régionale", input$situation_reg, input$situation_tempo),
-             "Nationale"       = plot_temp(data_filtree, "Nationale", NA, input$situation_tempo)
+             "Communale"       = plot_temp(data_filtree, "Communale", input$situation_commune, input$situation_tempo, input$situation_temp_choix),
+             "Départementale"  = plot_temp(data_filtree, "Départementale", input$situation_dep, input$situation_tempo, input$situation_temp_choix),
+             "Régionale"       = plot_temp(data_filtree, "Régionale", input$situation_reg, input$situation_tempo, input$situation_temp_choix),
+             "Nationale"       = plot_temp(data_filtree, "Nationale", NA, input$situation_tempo, input$situation_temp_choix)
       )
     }else if(input$situation_plot == "Precipitation"){
       switch(input$situation_gran,

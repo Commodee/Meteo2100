@@ -1,37 +1,53 @@
-plot_temp <- function(data, niveau_geo, input_geo, granularite_temps){
-  
-  # 1. Agrégation des données
+plot_temp <- function(data,
+                      niveau_geo,
+                      input_geo,
+                      granularite_temps,
+                      temp_choix) {
   data_mieux <- aggregate_meteo(data, granularite_temps, niveau_geo, input_geo)
   
-  # 2. Validation
   shiny::validate(
     shiny::need(
-      nrow(data_mieux) > 0, 
+      nrow(data_mieux) > 0,
       "Aucune donnée météo ne correspond à votre sélection géographique et temporelle."
     )
   )
   
-  # 3. Gestion du Titre (si input_geo est NA, on met "France")
-  titre_lieu <- if (is.null(input_geo) || is.na(input_geo)) "France entière" else input_geo
+  titre_lieu <- if (is.null(input_geo) ||
+                    is.na(input_geo))
+    "France entière"
+  else
+    input_geo
   
-  # 4. Création du graphique
-  ggplot(data_mieux, aes(x = periode)) +
-    
-    # A. Zone d'amplitude (Min - Max) en arrière-plan
-    geom_ribbon(aes(ymin = Temperature_min, ymax = Temperature_max), 
-                fill = "#3498db", alpha = 0.2) +
-    
-    NULL +
-    
-    # B. Ligne de Moyenne
-    geom_line(aes(y = Temperature_moyenne), 
-              color = "#2980b9", linewidth = 1.2) +
-    
-    # C. Thème et Esthétique
-    theme_minimal(base_size = 14) +
+  colonne_y <- switch(
+    temp_choix,
+    "Temperature max" = "Temperature_max",
+    "Temperature moy" = "Temperature_moyenne",
+    "Temperature min" = "Temperature_min",
+    "Tout"            = "Temperature_moyenne"
+  )
+  
+  p <- ggplot(data_mieux, aes(x = periode))
+  
+  if (temp_choix == "Tout") {
+    p <- p + geom_ribbon(
+      aes(ymin = Temperature_min, ymax = Temperature_max),
+      fill = "#3498db",
+      alpha = 0.2
+    )
+  }
+  
+  p <- p + geom_line(aes(y = .data[[colonne_y]]),
+                     color = "#2980b9",
+                     linewidth = 1.2)
+  
+  p <- p +  theme_minimal(base_size = 14) +
     labs(
       title = paste("🌡️ Évolution des températures :", titre_lieu),
-      subtitle = paste("Vue :", granularite_temps, "| La zone colorée représente l'amplitude Min/Max"),
+      subtitle = paste(
+        "Vue :",
+        granularite_temps,
+        "| La zone colorée représente l'amplitude Min/Max"
+      ),
       y = "Température (°C)",
       x = NULL,
       caption = "Source: Météo-France"
@@ -43,25 +59,31 @@ plot_temp <- function(data, niveau_geo, input_geo, granularite_temps){
       panel.grid.minor = element_blank(),
       panel.grid.major.x = element_line(linetype = "dotted", color = "gray80")
     )
+  
+  return(p)
 }
 
-plot_prec <- function(data,  niveau_geo, input_geo, granularite_temps){
-  # 1. Agrégation des données
+
+plot_prec <- function(data,
+                      niveau_geo,
+                      input_geo,
+                      granularite_temps) {
   data_mieux <- aggregate_meteo(data, granularite_temps, niveau_geo, input_geo)
   
-  # 2. Validation
   shiny::validate(
     shiny::need(
-      nrow(data_mieux) > 0, 
+      nrow(data_mieux) > 0,
       "Aucune donnée météo ne correspond à votre sélection géographique et temporelle."
     )
   )
   
-  # 3. Gestion du Titre (si input_geo est NA, on met "France")
-  titre_lieu <- if (is.null(input_geo) || is.na(input_geo)) "France entière" else input_geo
+  titre_lieu <- if (is.null(input_geo) ||
+                    is.na(input_geo))
+    "France entière"
+  else
+    input_geo
   
-  # 4. Création du graphique
-  ggplot(data_mieux, aes(x = periode, y=Precipitation_mm_moy)) +
+  ggplot(data_mieux, aes(x = periode, y = Precipitation_mm_moy)) +
     geom_col(fill = "steelblue") +
     theme_minimal(base_size = 14) +
     labs(

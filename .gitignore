@@ -5,6 +5,9 @@ data_climat/
 .Rhistory
 .Rapp.history
 
+data/
+data_climat/
+
 # Session Data files
 .RData
 .RDataTmp
@@ -50,3 +53,6 @@ po/*~
 
 # RStudio Connect folder
 rsconnect/
+
+# API keys
+/config_api.R

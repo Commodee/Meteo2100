@@ -22,39 +22,44 @@ load_drias_projections <- function(dossier_data = NULL) {
   
   fichiers <- list.files(dossier_valide, pattern = "\\.txt$", full.names = TRUE)
   
-  # 2. LECTURE SPÉCIALE "HORIZONS"
+  # 2. FONCTION DE LECTURE ROBUSTE
   lire_fichier_horizon <- function(chemin) {
     
-    # On lit sans en-tête (col_names = FALSE) pour éviter le problème des #
+    # Lecture brute sans en-tête
     df <- suppressMessages(read_delim(chemin, delim = ";", comment = "#", col_names = FALSE, 
                                       show_col_types = FALSE, col_types = cols(.default = "c")))
     
+    # Fallback virgule
     if (ncol(df) <= 1) {
       df <- suppressMessages(read_delim(chemin, delim = ",", comment = "#", col_names = FALSE, 
                                         show_col_types = FALSE, col_types = cols(.default = "c")))
     }
     
-    # D'après ton erreur précédente, la structure est :
-    # ... | Col 4 (Scénario) | Col 5 (Horizon: H1, H2...) | Col 6 (Valeur) ...
+    # Vérification structure minimale (Scenario, Horizon, Valeur)
     if (ncol(df) < 6) return(NULL)
     
+    # Extraction des colonnes clés (4=Scenario, 5=Horizon, 6=Valeur)
     df_clean <- df %>%
       select(X4, X5, X6) %>%
-      rename(scenario_raw = X4, horizon = X5, valeur = X6) %>%
+      rename(scenario_txt = X4, horizon_txt = X5, valeur = X6) %>%
       mutate(
         valeur = as.numeric(valeur),
-        # --- C'EST ICI QU'ON CONVERTIT LES HORIZONS EN ANNÉES ---
+        # DÉTECTION LARGE DES HORIZONS
         annee = case_when(
-          str_detect(horizon, "Ref") ~ 1990,       # Passé (Reference)
-          str_detect(horizon, "H1") ~ 2035,        # Futur proche
-          str_detect(horizon, "H2") ~ 2055,        # Futur moyen
-          str_detect(horizon, "H3") ~ 2085,        # Fin de siècle
+          # Passé (Reference) -> 1990
+          str_detect(horizon_txt, regex("Ref|His|1976", ignore_case = TRUE)) ~ 1990,
+          # H1 (2021-2050) -> 2035
+          str_detect(horizon_txt, regex("H1|2021|2035", ignore_case = TRUE)) ~ 2035,
+          # H2 (2041-2070) -> 2055
+          str_detect(horizon_txt, regex("H2|2041|2055", ignore_case = TRUE)) ~ 2055,
+          # H3 (2071-2100) -> 2085
+          str_detect(horizon_txt, regex("H3|2071|2085", ignore_case = TRUE)) ~ 2085,
           TRUE ~ NA_real_
         )
       ) %>%
       filter(!is.na(annee), !is.na(valeur))
     
-    # Correction du nom du scénario via le nom du fichier (plus sûr)
+    # On force le nom du scénario d'après le fichier pour éviter les mélanges
     nom_fichier <- basename(chemin)
     scen_fixe <- case_when(
       str_detect(nom_fichier, "2.6") ~ "rcp26",
@@ -72,12 +77,15 @@ load_drias_projections <- function(dossier_data = NULL) {
   
   if (is.null(donnees_brutes) || nrow(donnees_brutes) == 0) return(NULL)
   
-  # 4. AGREGATION
+  # 4. SÉCURITÉ : On s'assure que 1990 existe pour tout le monde
+  # Si un scénario n'a pas 1990, on lui donne la moyenne des autres (très probable que ce soit pareil)
+  ref_val <- mean(donnees_brutes$valeur[donnees_brutes$annee == 1990], na.rm = TRUE)
+  
+  # On complète les trous
   resultat <- donnees_brutes %>%
     group_by(annee, scenario) %>%
     summarise(
       temp_moy = mean(valeur, na.rm = TRUE),
-      # On simule un intervalle car les horizons donnent souvent juste la moyenne
       temp_min = temp_moy - 0.5, 
       temp_max = temp_moy + 0.5,
       .groups = "drop"

@@ -326,11 +326,11 @@ server <- function(input, output, session) {
   })
   
   # 3. Le Graphique de Projection (AVEC DÉCALAGE RÉGIONAL)
+  # 3. Le Graphique de Projection (VERSION CORRIGÉE & SÉCURISÉE)
   output$plot_projection <- renderPlot({
     req(input$demain_region)
     
     # --- A. Données Historiques (Réalité Locale) ---
-    # On récupère toute l'histoire disponible pour cette région
     data_hist <- global_data$meteo %>%
       filter(NOM_REGION == input$demain_region) %>%
       mutate(annee = year(DATE)) %>%
@@ -340,34 +340,39 @@ server <- function(input, output, session) {
       mutate(scenario = "Historique")
     
     # --- B. Données DRIAS (Modèle National) ---
-    raw_proj <- drias_data()
-    validate(need(!is.null(raw_proj), "Chargement DRIAS échoué."))
+    raw_proj <- drias_data() # Récupère les données du loader
     
-    # --- C. CALCUL DU DÉCALAGE (Le Delta) ---
-    # 1. On cherche la température moyenne de la région dans le passé (référence)
-    # On essaie de viser la période 1976-2005 si on a les données, sinon on prend tout ce qu'on a
+    # SÉCURITÉ : On vérifie proprement si les données sont bien là
+    # Cette écriture évite l'erreur "is.character(txt)"
+    shiny::validate(
+      need(is.data.frame(raw_proj), "Erreur : Les fichiers de projections n'ont pas pu être lus."),
+      need(nrow(raw_proj) > 0, "Erreur : Les fichiers de projections sont vides.")
+    )
+    
+    # --- C. CALCUL DU DÉCALAGE (Le Delta Régional) ---
+    # 1. Moyenne historique de la région (1976-2005)
     ref_region <- data_hist %>%
       filter(annee >= 1976, annee <= 2005) %>%
       summarise(m = mean(temp_moy, na.rm = TRUE)) %>%
       pull(m)
     
-    # Si on n'a pas assez de vieux historique (ex: mode Light), on prend la moyenne globale dispo
+    # Fallback si historique incomplet
     if (is.na(ref_region) || is.nan(ref_region)) {
       ref_region <- mean(data_hist$temp_moy, na.rm = TRUE)
     }
     
-    # 2. On cherche la référence dans le fichier DRIAS (c'est le point 1990)
+    # 2. Moyenne du modèle DRIAS (Point de référence 1990)
+    # On filtre sur l'année la plus proche de 1990 dispo dans le fichier Horizons
     ref_drias <- raw_proj %>%
       filter(annee == 1990) %>%
       summarise(m = mean(temp_moy, na.rm = TRUE)) %>%
       pull(m)
     
-    # 3. Le Delta : De combien faut-il monter/descendre la courbe ?
-    # Si Region (15°C) - Drias (12°C) = +3°C d'ajustement
-    offset <- ref_region - ref_drias
+    # Sécurité si le point 1990 est introuvable
+    if (is.na(ref_drias) || is.nan(ref_drias)) ref_drias <- ref_region 
     
-    # Sécurité si calcul impossible
-    if (is.na(offset)) offset <- 0
+    # 3. Calcul de l'ajustement
+    offset <- ref_region - ref_drias
     
     # --- D. APPLICATION DU DÉCALAGE ---
     data_proj_shifted <- raw_proj %>%
@@ -377,31 +382,35 @@ server <- function(input, output, session) {
         temp_max = temp_max + offset
       )
     
-    # On sépare pour l'affichage
-    data_proj_fond <- data_proj_shifted # Pour les pointillés
+    # Préparation pour l'affichage (Fond vs Sélection)
+    data_proj_fond <- data_proj_shifted 
     
     data_selected <- data_proj_shifted %>% 
       filter(scenario == input$scenario_giec, annee <= input$horizon_annee)
     
     # --- E. GRAPHIQUE ---
     p <- ggplot() +
-      # Historique
+      # Ligne Historique
       geom_line(data = data_hist, aes(x = annee, y = temp_moy, color = "Historique"), size = 1, alpha = 0.8) +
       
-      # Lignes de fond (Pointillés ajustés à la région)
+      # Lignes de fond (Pointillés - Tous scénarios)
+      # On force l'affichage même s'il n'y a que quelques points (group=scenario)
       geom_line(data = data_proj_fond, aes(x = annee, y = temp_moy, color = scenario, group = scenario), 
                 linetype = "dashed", alpha = 0.4) +
       geom_point(data = data_proj_fond, aes(x = annee, y = temp_moy, color = scenario), size = 2, alpha = 0.4)
     
+    # Ajout du Scénario Sélectionné
     if (nrow(data_selected) > 0) {
+      # Si on a plus d'un point, on trace la ligne
       if (nrow(data_selected) > 1) {
         p <- p +
           geom_ribbon(data = data_selected, aes(x = annee, ymin = temp_min, ymax = temp_max, fill = scenario), alpha = 0.2) +
           geom_line(data = data_selected, aes(x = annee, y = temp_moy, color = scenario), size = 1.5)
       }
+      # On ajoute toujours les points jalons (1990, 2035, etc.)
       p <- p + geom_point(data = data_selected, aes(x = annee, y = temp_moy, color = scenario), size = 4)
       
-      # Petit texte pour afficher la température en 2085
+      # Étiquette de fin de courbe
       val_fin <- tail(data_selected, 1)
       p <- p + geom_label(data = val_fin, aes(x = annee, y = temp_max, label = paste0("+", round(val_fin$temp_moy - ref_region, 1), "°C")), 
                           vjust = -0.5, size = 3, fontface = "bold", show.legend = FALSE)

@@ -262,7 +262,7 @@ server <- function(input, output, session) {
     }
     
     leaflet(data_map) %>%
-      #addTiles() %>%
+      addProviderTiles(providers$CartoDB.Positron) %>%
       addPolygons(
         fillColor = "white",
         color = "#2c3e50",    # Couleur des bordures

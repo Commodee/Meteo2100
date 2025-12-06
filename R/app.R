@@ -342,31 +342,30 @@ server <- function(input, output, session) {
     data_proj_all <- drias_data() %>%
       filter(annee <= input$horizon_annee)
     
-    # --- C. Construction du Graphique ---
+    # --- C. Construction du Graphique (Mode Horizons) ---
     p <- ggplot() +
+      # Historique réel (Ligne noire fine)
+      geom_line(data = data_hist, aes(x = annee, y = temp_moy, color = "Historique"), size = 1, alpha = 0.6) +
       
-      # 1. Courbe Historique (Trait Noir épais)
-      geom_line(data = data_hist, aes(x = annee, y = temp_moy, color = "Historique"), size = 1.2) +
-      
-      # 2. Toutes les Projections en fond (Pointillés discrets)
-      # Cela permet de comparer le scénario choisi aux autres
-      geom_line(data = data_proj_all, 
-                aes(x = annee, y = temp_moy, color = scenario, group = scenario), 
-                linetype = "dashed", size = 0.8, alpha = 0.5)
+      # Projections "Fantômes" (Pointillés)
+      geom_line(data = data_proj_all, aes(x = annee, y = temp_moy, color = scenario, group = scenario), 
+                linetype = "dashed", size = 0.8, alpha = 0.4) +
+      # AJOUT : Des points pour marquer les horizons
+      geom_point(data = data_proj_all, aes(x = annee, y = temp_moy, color = scenario), size = 2, alpha = 0.4)
     
-    # 3. Mise en valeur du Scénario sélectionné (Ruban + Trait plein)
     data_selected <- data_proj_all %>% filter(scenario == input$scenario_giec)
     
     if (nrow(data_selected) > 0) {
       p <- p +
-        # Ruban d'incertitude (Zone colorée)
-        geom_ribbon(data = data_selected,
-                    aes(x = annee, ymin = temp_min, ymax = temp_max, fill = scenario),
-                    alpha = 0.3) +
-        # La courbe principale du scénario choisi (plus épaisse)
-        geom_line(data = data_selected,
-                  aes(x = annee, y = temp_moy, color = scenario),
-                  size = 1.5)
+        # Ruban
+        geom_ribbon(data = data_selected, aes(x = annee, ymin = temp_min, ymax = temp_max, fill = scenario), alpha = 0.2) +
+        # Courbe lissée ou droite
+        geom_line(data = data_selected, aes(x = annee, y = temp_moy, color = scenario), size = 1.5) +
+        # Gros points pour le scénario choisi
+        geom_point(data = data_selected, aes(x = annee, y = temp_moy, color = scenario), size = 4) +
+        # Étiquettes de texte (optionnel mais classe)
+        geom_text(data = data_selected, aes(x = annee, y = temp_max + 0.5, label = round(temp_moy, 1)), 
+                  color = "#2c3e50", fontface = "bold", size = 4)
     }
     
     # --- D. Design et Couleurs ---

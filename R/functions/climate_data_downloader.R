@@ -40,7 +40,7 @@ list_dataset_resources <- function(dataset_id, verbose = TRUE) {
     warning("Erreur API data.gouv: ", conditionMessage(e))
     return(NULL)
   })
-})
+}
 
 #' Référentiel géo en cache global
 .ref_geo_cache <- NULL

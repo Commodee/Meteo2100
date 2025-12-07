@@ -13,7 +13,6 @@ library(waiter)
 source("data_loader.R")
 
 source("functions/aggregate_meteo.R")
-source("functions/climate_data_downloader.R")
 source("functions/plot.R")
 source("functions/projections_loader.R")
 

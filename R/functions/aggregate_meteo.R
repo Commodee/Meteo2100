@@ -1,3 +1,15 @@
+#' Agrégation spatiale et temporelle des données météo
+#'
+#' Agrège les données météorologiques brutes (niveau station/jour) vers un niveau géographique
+#' et une granularité temporelle cibles. Gère la moyenne pour les températures et la somme pour les précipitations.
+#'
+#' @param data Un objet Dataset Arrow ou un dataframe contenant les données brutes (TM, TN, TX, RR).
+#' @param granularite_temps Chaîne de caractères. "jour", "mois" ou "annee".
+#' @param niveau_geo Chaîne de caractères. "France", "Régionale", "Départementale" ou "Communale".
+#' @param choix_geo (Optionnel) Chaîne de caractères pour filtrer une zone précise (ex: "Bretagne").
+#'
+#' @return Un dataframe agrégé avec les colonnes \code{Temperature_moyenne}, \code{Temperature_min},
+#' \code{Temperature_max}, et \code{Precipitation_mm_moy}.
 aggregate_meteo <- function(data,
                             granularite_temps = "mois",
                             niveau_geo = "france",
@@ -25,8 +37,7 @@ aggregate_meteo <- function(data,
     )
   
   # --- ÉTAPE 1 : AGRÉGATION SPATIALE (Moyenne par Jour et par Zone) ---
-  # On réduit d'abord les stations météo en un seul point par zone géographique et par jour.
-  # Ici, pour la pluie (RR), on fait la MOYENNE spatiale (s'il pleut sur la moitié du département, la moyenne reflète ça).
+  # Ici, pour la pluie (RR), on fait la MOYENNE spatiale.
   
   group_vars_spatial <- "DATE"
   if (!is.na(col_geo))
@@ -43,9 +54,8 @@ aggregate_meteo <- function(data,
     )
   
   # --- ÉTAPE 2 : AGRÉGATION TEMPORELLE (Sur la période choisie) ---
-  # Maintenant qu'on a une valeur par jour, on agrège par Mois ou Année.
-  # Ici, pour la pluie, on fait la SOMME temporelle (cumul du mois/année).
-    if (granularite_temps == "mois") {
+  # Ici on SOMME.
+  if (granularite_temps == "mois") {
     data_spatial <- data_spatial %>% mutate(periode = floor_date(DATE, "month"))
   } else if (granularite_temps == "annee") {
     data_spatial <- data_spatial %>% mutate(periode = floor_date(DATE, "year"))
@@ -73,8 +83,18 @@ aggregate_meteo <- function(data,
   return(result)
 }
 
+#' Ré-agrégation temporelle de données déjà traitées
+#'
+#' Permet de changer la granularité temporelle (ex: passer de jour à mois/année)
+#' sur un dataset déjà filtré ou partiellement agrégé.
+#'
+#' @param data_jour Dataframe contenant des données journalières.
+#' @param tempo Chaîne de caractères. La granularité cible : "jour", "mois" ou "annee".
+#'
+#' @return Un dataframe ré-agrégé par la nouvelle période temporelle.
 reaggregate_tempo <- function(data_jour, tempo) {
-  if (tempo == "jour") return(data_jour)
+  if (tempo == "jour")
+    return(data_jour)
   
   # Définition de la période
   if (tempo == "mois") {

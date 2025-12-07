@@ -103,6 +103,14 @@ ui <- fluidPage(
       sidebarLayout(
         sidebarPanel(
           h1("Sidebar"),
+          radioButtons(
+            inputId = "carte_plot",
+            label = "On affiche quoi ?",
+            choices = c("Temperature", "Precipitation"),
+            selected = "Temperature"
+          ),
+          uiOutput("carte_temp_choix"),
+          hr(),
           # granularité
           radioButtons(
             inputId = "carte_ratio",
@@ -110,6 +118,18 @@ ui <- fluidPage(
             choices = c("Régionale", "Départementale"),
             selected = "Régionale"
           ),
+          
+          hr(),
+          
+          radioButtons(
+            inputId = "carte_tempo",
+            label = "Temporalité",
+            choices = c("Jour" = "jour", 
+                        "Mois" = "mois", 
+                        "Année" = "annee"),
+            selected = "annee"
+          ),
+          uiOutput("carte_date_choix")
         ), # sidebarPanel
         
         mainPanel(
@@ -302,6 +322,60 @@ server <- function(input, output, session) {
   
   
   # ---- Tab Carte ----
+  output$carte_temp_choix <- renderUI({
+    if (input$situation_plot == "Temperature") {
+      radioButtons(
+        inputId = "Carte_temp_choix",
+        label = "Quelle temperature ?",
+        choices = c("Temperature max", "Temperature min", "Temperature moy"),
+        selected = "Temperature moy"
+      )
+    } else {
+      NULL
+    }
+  })
+  
+  # Selcteur de date
+  output$carte_date_choix <- renderUI({
+    req(input$situation_tempo)
+    
+    if (input$carte_tempo == "annee") {
+      # CAS 1 : ANNÉE
+      airDatepickerInput(
+        inputId = "plage_dates",
+        label = "Quelle année :",
+        range = FALSE,
+        view = "years",
+        minView = "years",
+        dateFormat = "yyyy",
+        value = c("2025-12-31")
+      )
+      
+    } else if (input$carte_tempo == "mois") {
+      airDatepickerInput(
+        inputId = "plage_dates",
+        label = "Quel mois :",
+        range = FALSE,
+        view = "years",
+        minView = "months",
+        dateFormat = "MM/yyyy",
+        value = c("2020-01-01")
+      )
+      
+    } else {
+      # CAS 3 : JOUR
+      airDatepickerInput(
+        inputId = "plage_dates",
+        label = "Quel jour :",
+        range = FALSE,
+        view = "months",
+        minView = "days",
+        dateFormat = "dd/MM/yyyy",
+        value = "2025-12-01" 
+      )
+    }
+  })
+  
   output$carte_interactive <- renderLeaflet({
     data_map <- if (input$carte_ratio == "Départementale") {
       global_data$departements

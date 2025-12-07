@@ -1,15 +1,30 @@
-#' Petit helper pour les messages de log
+#' Message de log conditionnel
+#'
+#' @param ... Éléments à concaténer dans le message.
+#' @param verbose Logique. Si TRUE, affiche le message.
+#'
+#' @return Aucune valeur retournée (effet de bord).
 log_msg <- function(..., verbose = TRUE) {
-  if (verbose) cat(..., "\n")
+  if (verbose)
+    cat(..., "\n")
 }
 
-#' Lister les ressources disponibles sur data.gouv
+
+#' Lister les ressources d'un jeu de données data.gouv
+#'
+#' @param dataset_id Chaîne de caractères. L'identifiant du dataset sur data.gouv.fr.
+#' @param verbose Logique. Affiche les logs si TRUE.
+#'
+#' @return Un tibble contenant le titre, l'ID, l'URL et la période extraite de chaque ressource, ou NULL en cas d'erreur.
 list_dataset_resources <- function(dataset_id, verbose = TRUE) {
-  url <- paste0("https://www.data.gouv.fr/api/1/datasets/", dataset_id, "/")
+  url <- paste0("https://www.data.gouv.fr/api/1/datasets/",
+                dataset_id,
+                "/")
   
   tryCatch({
     response <- GET(url)
-    if (status_code(response) != 200) return(NULL)
+    if (status_code(response) != 200)
+      return(NULL)
     
     content <- content(response, "parsed", encoding = "UTF-8")
     
@@ -28,9 +43,15 @@ list_dataset_resources <- function(dataset_id, verbose = TRUE) {
   })
 }
 
-#' Récupérer le référentiel Géographique (Départements et Régions)
+
+#' Récupérer le référentiel géographique officiel
+#'
+#' @param verbose Logique. Affiche les logs si TRUE.
+#'
+#' @return Un dataframe avec les codes et noms des départements et régions.
 get_referentiel_geo <- function(verbose = TRUE) {
-  log_msg("Récupération du référentiel géographique (API Géo)...", verbose = verbose)
+  log_msg("Récupération du référentiel géographique (API Géo)...",
+          verbose = verbose)
   url <- "https://geo.api.gouv.fr/departements?fields=nom,code,region"
   
   tryCatch({
@@ -42,7 +63,8 @@ get_referentiel_geo <- function(verbose = TRUE) {
       NOM_REGION = data_geo$region$nom,
       stringsAsFactors = FALSE
     )
-    log_msg(paste("Référentiel chargé :", nrow(referentiel), "départements."), verbose = verbose)
+    log_msg(paste("Référentiel chargé :", nrow(referentiel), "départements."),
+            verbose = verbose)
     return(referentiel)
   }, error = function(e) {
     warning("Erreur API Géo : ", conditionMessage(e))
@@ -50,11 +72,30 @@ get_referentiel_geo <- function(verbose = TRUE) {
   })
 }
 
-#' Traite UNE SEULE ressource : Télécharge -> Nettoie -> Parquet -> Supprime CSV
-process_one_resource <- function(resource, dept_code, output_dir, ref_geo, verbose = TRUE) {
-  
-  suffixe <- if(is.na(resource$periode_str)) "autres" else gsub("periode_", "", resource$periode_str)
-  output_file <- file.path(output_dir, paste0("meteo_", dept_code, "_", suffixe, ".parquet"))
+
+#' Traitement d'une ressource météo unique
+#'
+#' Télécharge un fichier CSV (compressé ou non) depuis une URL, le nettoie,
+#' ajoute les informations géographiques et le sauvegarde au format Parquet.
+#'
+#' @param resource Liste ou ligne de dataframe contenant l'url et le titre de la ressource.
+#' @param dept_code Chaîne de caractères. Code du département.
+#' @param output_dir Chaîne de caractères. Dossier de sortie.
+#' @param ref_geo Dataframe. Le référentiel géographique pour la jointure.
+#' @param verbose Logique. Affiche les logs si TRUE.
+#'
+#' @return Logique. TRUE si succès ou si le fichier existe déjà.
+process_one_resource <- function(resource,
+                                 dept_code,
+                                 output_dir,
+                                 ref_geo,
+                                 verbose = TRUE) {
+  suffixe <- if (is.na(resource$periode_str))
+    "autres"
+  else
+    gsub("periode_", "", resource$periode_str)
+  output_file <- file.path(output_dir,
+                           paste0("meteo_", dept_code, "_", suffixe, ".parquet"))
   
   if (file.exists(output_file)) {
     log_msg(paste("   [OK] Déjà présent :", basename(output_file)), verbose = verbose)
@@ -66,13 +107,15 @@ process_one_resource <- function(resource, dept_code, output_dir, ref_geo, verbo
   tmp_csv <- tempfile(fileext = ".csv.gz")
   
   tryCatch({
-    response <- GET(resource$url, write_disk(tmp_csv, overwrite = TRUE), timeout(600))
+    response <- GET(resource$url,
+                    write_disk(tmp_csv, overwrite = TRUE),
+                    timeout(600))
     
     if (status_code(response) == 200) {
       df <- read_csv2(
-        tmp_csv, 
+        tmp_csv,
         locale = locale(encoding = "UTF-8"),
-        col_types = cols(.default = col_character()), 
+        col_types = cols(.default = col_character()),
         show_col_types = FALSE,
         progress = FALSE
       )
@@ -90,14 +133,12 @@ process_one_resource <- function(resource, dept_code, output_dir, ref_geo, verbo
             TX = as.numeric(TX),
             RR = as.numeric(RR)
           ) %>%
-          mutate(
-            ANNEE = year(DATE),
-            MOIS = month(DATE)
-          )
+          mutate(ANNEE = year(DATE), MOIS = month(DATE))
         
-        if (!is.null(ref_geo) & dept_code!=20) {
+        if (!is.null(ref_geo) & dept_code != 20) {
           df_clean <- left_join(df_clean, ref_geo, by = "CODE_DEPT")
-        } else { # Probleme avec la corse, on tekecharge avec 20, mais ref geo attend 2a et 2b
+        } else {
+          # Probleme avec la corse, on tekecharge avec 20, mais ref geo attend 2a et 2b
           ref_geo_corse <- data.frame(
             CODE_DEPT = "20",
             NOM_DEPT = "Corse",
@@ -117,20 +158,34 @@ process_one_resource <- function(resource, dept_code, output_dir, ref_geo, verbo
   }, error = function(e) {
     warning("Echec sur ", resource$titre, ": ", conditionMessage(e))
   }, finally = {
-    if (file.exists(tmp_csv)) unlink(tmp_csv)
+    if (file.exists(tmp_csv))
+      unlink(tmp_csv)
   })
   
   return(TRUE)
 }
 
-#' Fonction Principale : Orchestre le téléchargement (Mode Full ou Light)
-download_meteo_multi_parquet <- function(departements, 
-                                         mode = "full", 
-                                         annee = NULL, 
+
+#' Téléchargement des données météo
+#'
+#' Fonction principale pour télécharger et convertir en Parquet les données météo
+#' pour une liste de départements. Supporte un mode "light" (uniquement données récentes)
+#' ou "full" (historique complet depuis 1950).
+#'
+#' @param departements Vecteur de chaînes. Liste des codes départements à traiter.
+#' @param mode Chaîne de caractères. "full" ou "light".
+#' @param annee (Optionnel) Numérique. Pour filtrer une année spécifique.
+#' @param output_dir Chaîne de caractères. Dossier de destination des fichiers Parquet.
+#' @param verbose Logique. Affiche les logs si TRUE.
+#'
+#' @return NULL. Les fichiers sont sauvegardés sur le disque.
+download_meteo_multi_parquet <- function(departements,
+                                         mode = "full",
+                                         annee = NULL,
                                          output_dir = "../data/meteo_parquet",
                                          verbose = TRUE) {
-  
-  if (!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE)
+  if (!dir.exists(output_dir))
+    dir.create(output_dir, recursive = TRUE)
   log_msg(paste0("=== Sync Météo (Mode : ", mode, ") ==="), verbose = verbose)
   
   # Chargement unique du référentiel
@@ -138,7 +193,8 @@ download_meteo_multi_parquet <- function(departements,
   dataset_id <- "donnees-climatologiques-de-base-quotidiennes"
   
   all_resources <- list_dataset_resources(dataset_id, verbose = verbose)
-  if (is.null(all_resources)) return(NULL)
+  if (is.null(all_resources))
+    return(NULL)
   
   for (dept in departements) {
     log_msg(paste0("\nTraite Dept: ", dept), verbose = verbose)
@@ -146,8 +202,7 @@ download_meteo_multi_parquet <- function(departements,
     # 1. Identifier les ressources du département
     pattern_dept <- paste0("departement_", dept, "_")
     dept_res <- all_resources %>%
-      filter(str_detect(titre, fixed(pattern_dept, ignore_case = TRUE)), 
-             str_detect(titre, "RR-T-Vent"))
+      filter(str_detect(titre, fixed(pattern_dept, ignore_case = TRUE)), str_detect(titre, "RR-T-Vent"))
     
     if (nrow(dept_res) == 0) {
       log_msg("   Aucune donnée trouvée.", verbose = verbose)
@@ -156,17 +211,16 @@ download_meteo_multi_parquet <- function(departements,
     
     # 2. Analyser les années
     dept_res <- dept_res %>%
-      mutate(
-        start_year = as.numeric(str_extract(periode_str, "\\d{4}")),
-        end_year   = as.numeric(str_extract(periode_str, "(?<=-\\d{0,3})\\d{4}"))
-      ) %>%
+      mutate(start_year = as.numeric(str_extract(periode_str, "\\d{4}")),
+             end_year   = as.numeric(str_extract(periode_str, "(?<=-\\d{0,3})\\d{4}"))) %>%
       filter(end_year >= 1950) # On ignore l'avant-1950
     
     # 3. Filtrage "Mode Light" (Uniquement fichiers récents > 2024)
     if (mode == "light") {
       dept_res <- dept_res %>% filter(start_year >= 2024)
       if (nrow(dept_res) == 0) {
-        log_msg("   [Info] Mode Light : Aucun fichier récent (2024+) trouvé.", verbose = verbose)
+        log_msg("   [Info] Mode Light : Aucun fichier récent (2024+) trouvé.",
+                verbose = verbose)
         next
       }
     }
@@ -177,7 +231,8 @@ download_meteo_multi_parquet <- function(departements,
       
       # Filtre année spécifique optionnel
       if (!is.null(annee)) {
-        if (annee < res$start_year || annee > res$end_year) next
+        if (annee < res$start_year || annee > res$end_year)
+          next
       }
       
       process_one_resource(res, dept, output_dir, ref_geo, verbose = verbose)

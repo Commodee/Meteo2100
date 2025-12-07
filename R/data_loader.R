@@ -1,3 +1,20 @@
+#' Chargement et préparation des données globales
+#'
+#' @return Une liste nommée contenant :
+#' \itemize{
+#'   \item \code{regions} : Objet sf des régions.
+#'   \item \code{departements} : Objet sf des départements.
+#'   \item \code{drias} : Dataframe des projections climatiques nettoyées.
+#'   \item \code{meteo} : Connexion Arrow vers le dataset météo complet.
+#'   \item \code{meteo_nationale} : Dataframe agrégé au niveau national.
+#'   \item \code{meteo_regionale} : Dataframe agrégé au niveau régional.
+#'   \item \code{meteo_departementale} : Dataframe agrégé au niveau départemental.
+#' }
+#'
+#' @examples
+#' \dontrun{
+#' global_data <- load_raw_data()
+#' }
 load_raw_data <- function() {
   # 1. Configuration des chemins
   data_dir <- "../data"

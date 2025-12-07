@@ -46,8 +46,7 @@ load_raw_data <- function() {
   # Chargement des parquets avec arrow
   data_meteo_arrow <- arrow::open_dataset(parquet_dir)
   
-  # 3. Gestion des Fonds de Carte (Cache RDS)
-  # Fonction helper pour gérer le cache RDS
+  # Sous fonction
   load_or_create_rds <- function(file_name, create_func) {
     path <- file.path(data_dir, file_name)
     if (file.exists(path)) {
@@ -61,6 +60,31 @@ load_raw_data <- function() {
     }
   }
   
+  # 3. Gestion DRIAS
+  dest_txt <- file.path(data_dir, "prevision_DRIAS.txt")
+  if (!file.exists(dest_txt)) {
+    message("Téléchargement des projections DRIAS...")
+    tryCatch({
+      resp <- GET(
+        "https://huggingface.co/datasets/torvikk/meteo2100/resolve/main/prevision_DRIAS.txt?download=true",
+        write_disk(dest_txt, overwrite = TRUE),
+        progress(),
+        timeout(60)
+      )
+      if (status_code(resp) != 200)
+        stop("Erreur 404/401 sur l'URL DRIAS")
+    }, error = function(e) {
+      warning("Impossible de télécharger DRIAS. Vérifiez l'URL dans data_loader.R")
+      return(data.frame(
+        Contexte = character(),
+        annee = numeric(),
+        Temp_moy = numeric()
+      ))
+    })
+  }
+  drias_data <- process_drias_projections(dest_txt)
+  
+  # 4. Gestion Carte
   # Chargement Régions
   france_regions <- load_or_create_rds("regions.rds", function() {
     url <- "https://raw.githubusercontent.com/gregoiredavid/france-geojson/master/regions.geojson"
@@ -73,7 +97,7 @@ load_raw_data <- function() {
     st_read(url, quiet = TRUE) %>% rename(NOM_DEPT = nom)
   })
   
-  
+  #5. Gestion aggregation
   # Aggregation France
   meteo_nationale <- load_or_create_rds("meteo_nationale.rds", function() {
     aggregate_meteo(data_meteo_arrow, "jour", "Nationale")
@@ -93,6 +117,7 @@ load_raw_data <- function() {
     list(
       regions = france_regions,
       departements = france_departements,
+      drias = drias_data,
       meteo = data_meteo_arrow,
       meteo_nationale = meteo_nationale,
       meteo_regionale = meteo_regionale,

@@ -442,9 +442,6 @@ server <- function(input, output, session) {
     )
   })
   
-  # Chargement DRIAS
-  drias_data <- reactive({ load_drias_projections() })
-  
   # Description Scénario
   output$desc_scenario <- renderText({
     switch(input$scenario_giec,
@@ -482,7 +479,7 @@ server <- function(input, output, session) {
       )
     
     # 2. Récupération des Projections
-    raw_proj <- drias_data()
+    raw_proj <- global_data$drias
     shiny::validate(need(nrow(raw_proj) > 0, "Données DRIAS introuvables."))
     
     # 3. Calcul du Biais (Offset)

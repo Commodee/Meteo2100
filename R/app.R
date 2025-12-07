@@ -49,6 +49,7 @@ vec_commune <- global_data$meteo %>%
 ui <- fluidPage(
   autoWaiter(id="plot1",html = spin_3(), color = "white"),
   autoWaiter(id="carte_interactive",html = spin_3(), color = "white"),
+  autoWaiter(id="plot_projection",html = spin_3(), color = "white"),
   
   titlePanel("Météo2100"),
   tabsetPanel(
@@ -148,6 +149,7 @@ ui <- fluidPage(
       "Et demain ?",
       sidebarLayout(
         sidebarPanel(
+          width = 3,
           h3("Projections 2100"),
           p("Simulez l'avenir selon les différents scénarios du GIEC."),
           
@@ -176,8 +178,9 @@ ui <- fluidPage(
         ),
         
         mainPanel(
+          width = 9,
           h2("Trajectoire de température"),
-          plotOutput("plot_projection"),
+          plotOutput("plot_projection", height = "500px"),
           br(),
           wellPanel(
             h4("Détails du scénario"),
@@ -263,47 +266,71 @@ server <- function(input, output, session) {
   output$plot1 <- renderPlot({
     req(input$situation_gran, input$plage_dates)
     
-    # 1. Sélection de la source de données
-    data_source <- switch(
-      input$situation_gran,
-      "Nationale" = global_data$meteo_nationale,
-      "Régionale" = global_data$meteo_regionale,
-      "Départementale" = global_data$meteo_departementale
-    )
-    
-    # 2. Filtrage Géographique
-    if (input$situation_gran == "Régionale") {
-      req(input$situation_reg)
-      data_source <- data_source %>% filter(NOM_REGION == input$situation_reg)
-      titre <- input$situation_reg
-    } else if (input$situation_gran == "Départementale") {
-      req(input$situation_dep)
-      data_source <- data_source %>% filter(NOM_DEPT == input$situation_dep)
-      titre <- input$situation_dep
-    } else {
-      titre <- "France Entière"
-    }
-    
-    # 3. Filtrage Date
     date_deb <- as.Date(input$plage_dates[1])
     date_fin <- as.Date(input$plage_dates[2])
     if(input$situation_tempo == "annee") date_fin <- as.Date(paste0(year(date_fin), "-12-31"))
     
-    data_filtered <- data_source %>% filter(periode >= date_deb, periode <= date_fin)
+    if (input$situation_gran == "Station Météo") {
+      req(input$situation_commune)
+      
+
+      data_filtered <- global_data$meteo %>%
+        filter(NOM_USUEL == input$situation_commune) %>%
+        filter(DATE >= date_deb, DATE <= date_fin) %>%
+        select(DATE, TM, TN, TX, RR) %>%
+        collect() %>%
+        rename(
+          periode = DATE,
+          Temperature_moyenne = TM,
+          Temperature_min = TN,
+          Temperature_max = TX,
+          Precipitation_mm_moy = RR
+        ) %>%
+        mutate(
+          Temperature_moyenne = as.numeric(Temperature_moyenne),
+          Temperature_min = as.numeric(Temperature_min),
+          Temperature_max = as.numeric(Temperature_max),
+          Precipitation_mm_moy = as.numeric(Precipitation_mm_moy)
+        )
+      
+      titre <- input$situation_commune
+      
+    } else {
+      data_source <- switch(
+        input$situation_gran,
+        "Nationale" = global_data$meteo_nationale,
+        "Régionale" = global_data$meteo_regionale,
+        "Départementale" = global_data$meteo_departementale
+      )
+      
+      # Filtrage Géo
+      if (input$situation_gran == "Régionale") {
+        req(input$situation_reg)
+        data_source <- data_source %>% filter(NOM_REGION == input$situation_reg)
+        titre <- input$situation_reg
+      } else if (input$situation_gran == "Départementale") {
+        req(input$situation_dep)
+        data_source <- data_source %>% filter(NOM_DEPT == input$situation_dep)
+        titre <- input$situation_dep
+      } else {
+        titre <- "France Entière"
+      }
+      
+      data_filtered <- data_source %>% filter(periode >= date_deb, periode <= date_fin)
+    }
     
     shiny::validate(need(nrow(data_filtered) > 0, "Pas de données sur cette période."))
     
-    # 4. Ré-agrégation Temporelle (Jour -> Mois ou Année)
+    # 2. Ré-agrégation Temporelle (si besoin)
     data_ready <- reaggregate_tempo(data_filtered, input$situation_tempo)
     
-    # 5. Plot
+    # 3. Plot
     if(input$situation_plot == "Temperature"){
       plot_temp(data_ready, titre, input$situation_tempo, input$situation_temp_choix)
     } else {
       plot_prec(data_ready, titre, input$situation_tempo)
     }
   })
-  
   
   # ---- Tab Carte ----
   output$carte_temp_choix <- renderUI({

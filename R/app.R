@@ -82,7 +82,7 @@ ui <- fluidPage(
           radioButtons(
             inputId = "situation_tempo",
             label = "Temporalité",
-            choices = c("Jour" = "jour", 
+            choices = c("Jour (Attention, le graphique peut mettre du temps a apparaitre)" = "jour", 
                         "Mois" = "mois", 
                         "Année" = "annee"),
             selected = "annee"
@@ -127,7 +127,7 @@ ui <- fluidPage(
           radioButtons(
             inputId = "carte_tempo",
             label = "Temporalité",
-            choices = c("Jour" = "jour", 
+            choices = c("Jour  (Attention, le graphique peut mettre du temps a apparaitre)" = "jour", 
                         "Mois" = "mois", 
                         "Année" = "annee"),
             selected = "annee"
@@ -272,54 +272,44 @@ server <- function(input, output, session) {
   output$plot1 <- renderPlot({
     req(input$situation_gran, input$plage_dates)
     
-    # --- 1. SÉCURITÉ & VALIDATION ---
-    # C'est ici qu'on limite la plage "Max"
+    # 1. Sélection de la source de données
+    data_source <- switch(
+      input$situation_gran,
+      "Nationale" = global_data$meteo_nationale,
+      "Régionale" = global_data$meteo_regionale,
+      "Départementale" = global_data$meteo_departementale
+    )
     
-    # Calcul de la durée en jours
-    duree_jours <- as.numeric(difftime(input$plage_dates[2], input$plage_dates[1], units = "days"))
-    duree_annees <- duree_jours / 365
-    
-    if (input$situation_tempo == "mois") {
-      shiny::validate(
-        need(duree_annees <= 5, "⚠️ La période est trop longue pour un affichage mensuel. Veuillez sélectionner moins de 5 ans.")
-      )
-    } else if (input$situation_tempo == "jour") {
-      shiny::validate(
-        need(duree_jours <= 180, "⚠️ La période est trop longue pour un affichage mensuel. Veuillez sélectionner moins de 6 mois.")
-      )
+    # 2. Filtrage Géographique
+    if (input$situation_gran == "Régionale") {
+      req(input$situation_reg)
+      data_source <- data_source %>% filter(NOM_REGION == input$situation_reg)
+      titre <- input$situation_reg
+    } else if (input$situation_gran == "Départementale") {
+      req(input$situation_dep)
+      data_source <- data_source %>% filter(NOM_DEPT == input$situation_dep)
+      titre <- input$situation_dep
+    } else {
+      titre <- "France Entière"
     }
     
+    # 3. Filtrage Date
+    date_deb <- as.Date(input$plage_dates[1])
+    date_fin <- as.Date(input$plage_dates[2])
+    if(input$situation_tempo == "annee") date_fin <- as.Date(paste0(year(date_fin), "-12-31"))
     
-    # --- 2. FILTRAGE DES DONNÉES ---
-    # On filtre les données Arrow AVANT de les envoyer au plot
-    date_debut <- input$plage_dates[1]
-    date_fin   <- input$plage_dates[2]
+    data_filtered <- data_source %>% filter(periode >= date_deb, periode <= date_fin)
     
-    if (input$situation_tempo == "annee") {
-      date_fin <- as.Date(paste0(year(date_fin), "-12-31"))
-    }
+    shiny::validate(need(nrow(data_filtered) > 0, "Pas de données sur cette période."))
     
-    data_filtree <- global_data$meteo %>%
-      filter(
-        DATE >= date_debut,
-        DATE <= date_fin
-      )
+    # 4. Ré-agrégation Temporelle (Jour -> Mois ou Année)
+    data_ready <- reaggregate_tempo(data_filtered, input$situation_tempo)
     
-    # --- 3. GÉNÉRATION DU GRAPHIQUE ---
+    # 5. Plot
     if(input$situation_plot == "Temperature"){
-      switch(input$situation_gran,
-             "Communale"       = plot_temp(data_filtree, "Communale", input$situation_commune, input$situation_tempo, input$situation_temp_choix),
-             "Départementale"  = plot_temp(data_filtree, "Départementale", input$situation_dep, input$situation_tempo, input$situation_temp_choix),
-             "Régionale"       = plot_temp(data_filtree, "Régionale", input$situation_reg, input$situation_tempo, input$situation_temp_choix),
-             "Nationale"       = plot_temp(data_filtree, "Nationale", NA, input$situation_tempo, input$situation_temp_choix)
-      )
-    }else if(input$situation_plot == "Precipitation"){
-      switch(input$situation_gran,
-             "Communale"       = plot_prec(data_filtree, "Communale", input$situation_commune, input$situation_tempo),
-             "Départementale"  = plot_prec(data_filtree, "Départementale", input$situation_dep, input$situation_tempo),
-             "Régionale"       = plot_prec(data_filtree, "Régionale", input$situation_reg, input$situation_tempo),
-             "Nationale"       = plot_prec(data_filtree, "Nationale", NA, input$situation_tempo)
-      )
+      plot_temp(data_ready, titre, input$situation_tempo, input$situation_temp_choix)
+    } else {
+      plot_prec(data_ready, titre, input$situation_tempo)
     }
   })
   
@@ -382,70 +372,51 @@ server <- function(input, output, session) {
   output$carte_interactive <- renderLeaflet({
     req(input$carte_ratio, input$carte_date)
     
+    # 1. Alignement Date
+    date_cible <- as.Date(input$carte_date)
+    if (input$carte_tempo == "annee") date_cible <- floor_date(date_cible, "year")
+    if (input$carte_tempo == "mois")  date_cible <- floor_date(date_cible, "month")
+    
+    # 2. Choix Source
     if (input$carte_ratio == "Départementale") {
-      data_map <- global_data$departements
-      nom_col <- "NOM_DEPT"
+      map_geo <- global_data$departements
+      data_meteo <- global_data$meteo_departementale
+      key_col <- "NOM_DEPT"
     } else {
-      data_map <- global_data$regions
-      nom_col <- "NOM_REGION"
+      map_geo <- global_data$regions
+      data_meteo <- global_data$meteo_regionale
+      key_col <- "NOM_REGION"
     }
     
-    data_meto <- aggregate_meteo(global_data$meteo, input$carte_tempo, input$carte_ratio) %>% 
-      filter(
-        periode == as.Date(input$carte_date)
-      )
+    # 3. Filtre Temporel
+    # On filtre d'abord l'année concernée pour aller vite
+    annee_cible <- year(date_cible)
+    data_subset <- data_meteo %>% 
+      filter(year(periode) == annee_cible) 
     
-    # if (input$carte_tempo == "annee") {
-    #   data_meto <- floor_date(data_meto, "periode")  # Transforme 2025-12-31 en 2025-01-01
-    # } else if (input$carte_tempo == "mois") {
-    #   data_meto <- floor_date(data_meto, "periode") # Transforme 2025-05-15 en 2025-05-01
-    # }
-
-    shiny::validate(
-      shiny::need(nrow(data_meto) > 0, paste("Pas de données météo disponibles pour la date :", as.Date(input$carte_date)))
-    )
+    # 4. Ré-agrégation & Sélection finale
+    # On transforme les jours en Mois/Année, PUIS on garde la date cible
+    data_final_meteo <- reaggregate_tempo(data_subset, input$carte_tempo) %>%
+      filter(periode == date_cible)
     
+    shiny::validate(need(nrow(data_final_meteo) > 0, paste("Pas de données pour", date_cible)))
     
+    # 5. Jointure & Carte
+    map_final <- map_geo %>% left_join(data_final_meteo, by = key_col)
+    if (!inherits(map_final, "sf")) map_final <- st_as_sf(map_final)
     
-    data_map_final <- data_map %>% 
-      left_join(data_meto, by = nom_col) %>% 
-      rename(nom = nom_col)
+    pal <- colorNumeric("RdYlBu", domain = map_final$Temperature_moyenne, reverse = TRUE, na.color = "#808080")
     
-    if (!inherits(data_map_final, "sf")) {
-      data_map_final <- st_as_sf(data_map_final)
-    }
-    
-    pal <- colorNumeric(
-      palette = "RdYlBu", 
-      domain = data_map_final$Temperature_moyenne,
-      reverse = TRUE,
-      na.color = "#808080"
-    )
-    
-    leaflet(data_map_final) %>%
+    leaflet(map_final) %>%
       addProviderTiles(providers$CartoDB.Positron) %>%
       addPolygons(
         fillColor = ~pal(Temperature_moyenne),
-        color = "#2c3e50",    # Couleur des bordures
-        weight = 1,           # Epaisseur du trait
-        opacity = 1,
-        fillOpacity = 0.4,    # Transparence du fond
-        label = ~nom,         # Affiche le nom de la région/dept au survol
-        highlightOptions = highlightOptions(
-          weight = 3,
-          color = "#e74c3c",
-          fillOpacity = 0.7,
-          bringToFront = TRUE
-        )
+        color = "#2c3e50", weight = 1, opacity = 1, fillOpacity = 0.6,
+        label = ~paste0(get(key_col), ": ", round(Temperature_moyenne, 1), "°C"),
+        highlightOptions = highlightOptions(weight = 3, color = "#e74c3c", bringToFront = TRUE)
       ) %>%
-      addLegend(
-        pal = pal, 
-        values = ~Temperature_moyenne, 
-        opacity = 0.7, 
-        title = "Temp. Moy (°C)",
-        position = "bottomright"
-      ) %>% 
-      setView(lng = 2.2137, lat = 46.2276, zoom = 6)
+      addLegend(pal = pal, values = ~Temperature_moyenne, title = "Temp. Moy (°C)", position = "bottomright") %>%
+      setView(2.21, 46.22, 6)
   })
   # ---- Tab Demain ----
   

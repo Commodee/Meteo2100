@@ -1,41 +1,102 @@
 load_raw_data <- function() {
-  url_regions <- "https://raw.githubusercontent.com/gregoiredavid/france-geojson/master/regions.geojson"
-  url_departements <- "https://raw.githubusercontent.com/gregoiredavid/france-geojson/master/departements.geojson"
-  #url_communes <- "https://raw.githubusercontent.com/gregoiredavid/france-geojson/master/communes.geojson"
+  # 1. Configuration des chemins
+  data_dir <- "../data"
+  parquet_dir <- file.path(data_dir, "meteo_parquet")
   
-  france_regions <- st_read(url_regions, quiet = FALSE) %>% rename(
-    NOM_REGION = nom
-    )
+  # Vérification dossier Data
+  if (!dir.exists(data_dir)) {
+    dir.create(data_dir, recursive = TRUE)
+    message("Dossier 'data' créé.")
+  }
+  
+  # 2. Gestion des Données Météo (Parquet)
+  # Si le dossier n'existe pas, on télécharge et dézippe
+  if (!dir.exists(parquet_dir)) {
+    message("Données météo introuvables. Téléchargement depuis HuggingFace...")
     
-  france_departements <- st_read(url_departements, quiet = FALSE) %>% 
-    rename(
-      NOM_DEPT = nom
-    )
     
-  #france_communes <- st_read(url_communes, quiet = TRUE)
+    zip_url <- "https://huggingface.co/datasets/torvikk/meteo2100/resolve/main/meteo_parquet.zip?download=true"
+    dest_zip <- file.path(data_dir, "meteo_parquet.zip")
+    
+    tryCatch({
+      response <- GET(zip_url,
+                      write_disk(dest_zip, overwrite = TRUE),
+                      progress(),
+                      timeout(600))
+      
+      if (status_code(response) == 200) {
+        message("Décompression de l'archive...")
+        unzip(dest_zip, exdir = data_dir)
+        message("Données météo installées avec succès.")
+      } else {
+        stop(paste(
+          "Échec téléchargement. Code HTTP :",
+          status_code(response)
+        ))
+      }
+      
+    }, error = function(e) {
+      stop("Erreur critique lors du téléchargement : ", e$message)
+    }, finally = {
+      if (file.exists(dest_zip))
+        unlink(dest_zip)
+    })
+  }
   
-  dossier_parquet <- "../data/meteo_parquet"
-  liste_depts <- c("01", "02", "03", "04", "05", "06", "07", "08", "09", "10",
-                       "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21",
-                       "22", "23", "24", "25", "26", "27", "28", "29",
-                       "30", "31", "32", "33", "34", "35", "36", "37", "38", "39",
-                       "40", "41", "42", "43", "44", "45", "46", "47", "48", "49",
-                       "50", "51", "52", "53", "54", "55", "56", "57", "58", "59",
-                       "60", "61", "62", "63", "64", "65", "66", "67", "68", "69",
-                       "70", "71", "72", "73", "74", "75", "76", "77", "78", "79",
-                       "80", "81", "82", "83", "84", "85", "86", "87", "88", "89",
-                       "90", "91", "92", "93", "94", "95","971", "972", "973", "974", "976")
+  # Chargement des parquets avec arrow
+  data_meteo_arrow <- arrow::open_dataset(parquet_dir)
   
-  #download_meteo_multi_parquet(liste_depts ,output_dir = dossier_parquet, mode = "full")
+  # 3. Gestion des Fonds de Carte (Cache RDS)
+  # Fonction helper pour gérer le cache RDS
+  load_or_create_rds <- function(file_name, create_func) {
+    path <- file.path(data_dir, file_name)
+    if (file.exists(path)) {
+      message(paste("Chargement cache :", file_name))
+      return(readRDS(path))
+    } else {
+      message(paste("Création/Téléchargement :", file_name))
+      data <- create_func()
+      saveRDS(data, path)
+      return(data)
+    }
+  }
+  
+  # Chargement Régions
+  france_regions <- load_or_create_rds("regions.rds", function() {
+    url <- "https://raw.githubusercontent.com/gregoiredavid/france-geojson/master/regions.geojson"
+    st_read(url, quiet = TRUE) %>% rename(NOM_REGION = nom)
+  })
+  
+  # Chargement Départements
+  france_departements <- load_or_create_rds("departements.rds", function() {
+    url <- "https://raw.githubusercontent.com/gregoiredavid/france-geojson/master/departements.geojson"
+    st_read(url, quiet = TRUE) %>% rename(NOM_DEPT = nom)
+  })
   
   
+  # Aggregation France
+  meteo_nationale <- load_or_create_rds("meteo_nationale.rds", function() {
+    aggregate_meteo(data_meteo_arrow, "jour", "Nationale")
+  })
   
-  data_meteo_arrow <- arrow::open_dataset(dossier_parquet)
+  # Aggregation Régionale
+  meteo_regionale <- load_or_create_rds("meteo_regionale.rds", function() {
+    aggregate_meteo(data_meteo_arrow, "jour", "Régionale")
+  })
   
-  return(list(
-    regions = france_regions,
-    departements = france_departements,
-    meteo = data_meteo_arrow 
-  )
+  # Aggregation Départementale
+  meteo_departementale <- load_or_create_rds("meteo_departementale.rds", function() {
+    aggregate_meteo(data_meteo_arrow, "jour", "Départementale")
+  })
+  
+  return(
+    list(
+      regions = france_regions,
+      departements = france_departements,
+      meteo = data_meteo_arrow,
+      meteo_nationale = meteo_nationale,
+      meteo_regionale = meteo_regionale,
+      meteo_departementale = meteo_departementale
+    )
   )
 }

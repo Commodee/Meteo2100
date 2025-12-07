@@ -329,12 +329,13 @@ server <- function(input, output, session) {
       setView(lng = 2.2137, lat = 46.2276, zoom = 6)
   })
   # ---- Tab Demain ----
-  # 1. Chargement des données DRIAS (s'exécute une seule fois au lancement)
+  
+  # 1. Chargement des données DRIAS (inchangé)
   drias_data <- reactive({
     load_drias_projections()
   })
   
-  # 2. Description dynamique du scénario sélectionné
+  # 2. Description (inchangé)
   output$desc_scenario <- renderText({
     switch(input$scenario_giec,
            "rcp26" = "🟢 Scénario Optimiste (Accord de Paris) : Fortes réductions d'émissions. La température se stabilise vers 2050.",
@@ -343,106 +344,87 @@ server <- function(input, output, session) {
     )
   })
   
-  # 3. Le Graphique de Projection (AVEC DÉCALAGE RÉGIONAL)
-  # 3. Le Graphique de Projection (VERSION CORRIGÉE & SÉCURISÉE)
+  # 3. Le Graphique de Projection (SIMPLIFIÉ)
   output$plot_projection <- renderPlot({
     req(input$demain_region)
     
-    # --- A. Données Historiques (Réalité Locale) ---
-    data_hist <- global_data$meteo %>%
-      filter(NOM_REGION == input$demain_region) %>%
-      mutate(annee = year(DATE)) %>%
-      group_by(annee) %>%
-      summarise(temp_moy = mean(TM, na.rm = TRUE), .groups = "drop") %>%
-      collect() %>%
-      mutate(scenario = "Historique")
-    
-    # --- B. Données DRIAS (Modèle National) ---
-    raw_proj <- drias_data() # Récupère les données du loader
-    
-    # SÉCURITÉ : On vérifie proprement si les données sont bien là
-    # Cette écriture évite l'erreur "is.character(txt)"
-    shiny::validate(
-      need(is.data.frame(raw_proj), "Erreur : Les fichiers de projections n'ont pas pu être lus."),
-      need(nrow(raw_proj) > 0, "Erreur : Les fichiers de projections sont vides.")
-    )
-    
-    # --- C. CALCUL DU DÉCALAGE (Le Delta Régional) ---
-    # 1. Moyenne historique de la région (1976-2005)
-    ref_region <- data_hist %>%
-      filter(annee >= 1976, annee <= 2005) %>%
-      summarise(m = mean(temp_moy, na.rm = TRUE)) %>%
-      pull(m)
-    
-    # Fallback si historique incomplet
-    if (is.na(ref_region) || is.nan(ref_region)) {
-      ref_region <- mean(data_hist$temp_moy, na.rm = TRUE)
-    }
-    
-    # 2. Moyenne du modèle DRIAS (Point de référence 1990)
-    # On filtre sur l'année la plus proche de 1990 dispo dans le fichier Horizons
-    ref_drias <- raw_proj %>%
-      filter(annee == 1990) %>%
-      summarise(m = mean(temp_moy, na.rm = TRUE)) %>%
-      pull(m)
-    
-    # Sécurité si le point 1990 est introuvable
-    if (is.na(ref_drias) || is.nan(ref_drias)) ref_drias <- ref_region 
-    
-    # 3. Calcul de l'ajustement
-    offset <- ref_region - ref_drias
-    
-    # --- D. APPLICATION DU DÉCALAGE ---
-    data_proj_shifted <- raw_proj %>%
+    # --- A. Données Historiques via aggregate_meteo ---
+    # On récupère directement min, max et moy grâce à la fonction
+    data_hist <- aggregate_meteo(
+      data = global_data$meteo,
+      granularite_temps = "annee",
+      niveau_geo = "Régionale",
+      choix_geo = input$demain_region
+    ) %>%
       mutate(
-        temp_moy = temp_moy + offset,
-        temp_min = temp_min + offset,
-        temp_max = temp_max + offset
+        annee = year(periode), # Conversion date -> année pour alignement
+        scenario = "Historique"
       )
     
-    # Préparation pour l'affichage (Fond vs Sélection)
-    data_proj_fond <- data_proj_shifted 
+    # --- B. Données Projections (DRIAS) ---
+    raw_proj <- drias_data()
     
-    data_selected <- data_proj_shifted %>% 
-      filter(scenario == input$scenario_giec, annee <= input$horizon_annee)
+    shiny::validate(
+      need(nrow(raw_proj) > 0, "Les données de projections sont introuvables.")
+    )
     
-    # --- E. GRAPHIQUE ---
-    p <- ggplot() +
-      # Ligne Historique
-      geom_line(data = data_hist, aes(x = annee, y = temp_moy, color = "Historique"), size = 1, alpha = 0.8) +
+    # --- C. Calcul du décalage (Offset) ---
+    # Moyenne Historique (1976-2005) vs Moyenne Modèle (1990)
+    ref_hist <- mean(data_hist$Temperature_moyenne[data_hist$annee %in% 1976:2005], na.rm = TRUE)
+    # Si pas assez de données historiques, on prend toute la moyenne dispo
+    if(is.na(ref_hist)) ref_hist <- mean(data_hist$Temperature_moyenne, na.rm = TRUE)
+    
+    ref_proj <- mean(raw_proj$Temp_moy[raw_proj$annee == 2005], na.rm = TRUE)
+    
+    offset <- ref_hist - ref_proj
+    
+    # --- D. Préparation des données Projections ---
+    # On harmonise les noms de colonnes avec ceux de aggregate_meteo
+    data_proj_final <- raw_proj %>%
+      mutate(
+        Temperature_moyenne = Temp_moy + offset,
+        Temperature_min     = Temp_min + offset,
+        Temperature_max     = Temp_max + offset
+      ) %>%
+      filter(annee <= input$horizon_annee)
+    
+    # Séparation : le scénario choisi vs les autres (pour le fond)
+    data_proj_selected <- data_proj_final %>% filter(Contexte == input$scenario_giec)
+    data_proj_back     <- data_proj_final 
+    
+    # --- E. Graphique ---
+    ggplot() +
+      # 1. Le fond (tous les scénarios en pointillé)
+      geom_line(data = data_proj_back, 
+                aes(x = annee, y = Temperature_moyenne, group = Contexte), 
+                color = "grey60", linetype = "dashed", alpha = 0.5) +
       
-      # Lignes de fond (Pointillés - Tous scénarios)
-      # On force l'affichage même s'il n'y a que quelques points (group=scenario)
-      geom_line(data = data_proj_fond, aes(x = annee, y = temp_moy, color = scenario, group = scenario), 
-                linetype = "dashed", alpha = 0.4) +
-      geom_point(data = data_proj_fond, aes(x = annee, y = temp_moy, color = scenario), size = 2, alpha = 0.4)
-    
-    # Ajout du Scénario Sélectionné
-    if (nrow(data_selected) > 0) {
-      # Si on a plus d'un point, on trace la ligne
-      if (nrow(data_selected) > 1) {
-        p <- p +
-          geom_ribbon(data = data_selected, aes(x = annee, ymin = temp_min, ymax = temp_max, fill = scenario), alpha = 0.2) +
-          geom_line(data = data_selected, aes(x = annee, y = temp_moy, color = scenario), size = 1.5)
-      }
-      # On ajoute toujours les points jalons (1990, 2035, etc.)
-      p <- p + geom_point(data = data_selected, aes(x = annee, y = temp_moy, color = scenario), size = 4)
+      # 2. L'historique (Trait plein sombre)
+      geom_line(data = data_hist, 
+                aes(x = annee, y = Temperature_moyenne, color = "Historique"), 
+                linewidth = 1) +
+      geom_ribbon(data = data_hist,
+                  aes(x=annee, ymin =Temperature_min, ymax=Temperature_max, color="Historique"),
+                  alpha=0.2)+
       
-      # Étiquette de fin de courbe
-      val_fin <- tail(data_selected, 1)
-      p <- p + geom_label(data = val_fin, aes(x = annee, y = temp_max, label = paste0("+", round(temp_moy - ref_region, 1), "°C")), 
-                          vjust = -0.5, size = 3, fontface = "bold", show.legend = FALSE)
-    }
-    
-    p +
+      # 3. Le Scénario choisi (Rubbon Min/Max + Ligne Moyenne)
+      geom_ribbon(data = data_proj_selected,
+                  aes(x = annee, ymin = Temperature_min, ymax = Temperature_max, fill = Contexte),
+                  alpha = 0.2) +
+      
+      geom_line(data = data_proj_selected,
+                aes(x = annee, y = Temperature_moyenne, color = Contexte),
+                linewidth = 1.5) +
+      
+      # Esthétique
       scale_color_manual(values = c("Historique" = "#2c3e50", "rcp26" = "#2ecc71", "rcp45" = "#f39c12", "rcp85" = "#e74c3c")) +
       scale_fill_manual(values = c("rcp26" = "#2ecc71", "rcp45" = "#f39c12", "rcp85" = "#e74c3c")) +
-      geom_vline(xintercept = 2024, linetype = "dotted", color = "gray50") +
+      geom_vline(xintercept = 2024, linetype = "dotted") +
       theme_minimal(base_size = 14) +
       labs(
-        title = paste("Trajectoire pour :", input$demain_region),
-        subtitle = paste("Ajustement local de", round(offset, 1), "°C par rapport au modèle national"),
-        y = "Température Moyenne (°C)", x = NULL
+        title = paste("Trajectoire :", input$demain_region),
+        subtitle = paste("Ajustement (biais) appliqué :", round(offset, 1), "°C"),
+        y = "Température (°C)", x = NULL, fill = "Scénario", color = "Scénario"
       )
   })
     

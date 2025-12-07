@@ -10,7 +10,7 @@ library(waiter)
 
 
 # load externals scripts ----------------------------------------------------
-source("data_loader.R")
+source("data_loader2.R")
 
 source("functions/aggregate_meteo.R")
 source("functions/plot.R")

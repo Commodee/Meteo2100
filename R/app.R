@@ -330,12 +330,12 @@ server <- function(input, output, session) {
   })
   # ---- Tab Demain ----
   
-  # 1. Chargement des données DRIAS (inchangé)
+  # 1. Chargement des données DRIAS
   drias_data <- reactive({
     load_drias_projections()
   })
   
-  # 2. Description (inchangé)
+  # 2. Description
   output$desc_scenario <- renderText({
     switch(input$scenario_giec,
            "rcp26" = "🟢 Scénario Optimiste (Accord de Paris) : Fortes réductions d'émissions. La température se stabilise vers 2050.",
@@ -344,12 +344,11 @@ server <- function(input, output, session) {
     )
   })
   
-  # 3. Le Graphique de Projection (SIMPLIFIÉ)
+  # 3. Le Graphique de Projection
   output$plot_projection <- renderPlot({
     req(input$demain_region)
     
-    # --- A. Données Historiques via aggregate_meteo ---
-    # On récupère directement min, max et moy grâce à la fonction
+    # --- A. Données Historiques ---
     data_hist <- aggregate_meteo(
       data = global_data$meteo,
       granularite_temps = "annee",
@@ -361,7 +360,7 @@ server <- function(input, output, session) {
         scenario = "Historique"
       )
     
-    # --- B. Données Projections (DRIAS) ---
+    # --- B. Données Projections(DRIAS) ---
     raw_proj <- drias_data()
     
     shiny::validate(
@@ -369,7 +368,7 @@ server <- function(input, output, session) {
     )
     
     # --- C. Calcul du décalage (Offset) ---
-    # Moyenne Historique (1976-2005) vs Moyenne Modèle (1990)
+    # Moyenne Historique (1976-2005) vs Moyenne Modèle (2005)
     ref_hist <- mean(data_hist$Temperature_moyenne[data_hist$annee %in% 1976:2005], na.rm = TRUE)
     # Si pas assez de données historiques, on prend toute la moyenne dispo
     if(is.na(ref_hist)) ref_hist <- mean(data_hist$Temperature_moyenne, na.rm = TRUE)
@@ -394,27 +393,27 @@ server <- function(input, output, session) {
     
     # --- E. Graphique ---
     ggplot() +
-      # 1. Le fond (tous les scénarios en pointillé)
+      # tous les scénarios en pointillé
       geom_line(data = data_proj_back, 
                 aes(x = annee, y = Temperature_moyenne, group = Contexte), 
                 color = "grey60", linetype = "dashed", alpha = 0.5) +
       
-      # 2. L'historique (Trait plein sombre)
+      # L'historique
       geom_line(data = data_hist, 
                 aes(x = annee, y = Temperature_moyenne, color = "Historique"), 
                 linewidth = 1) +
-      geom_ribbon(data = data_hist,
-                  aes(x=annee, ymin =Temperature_min, ymax=Temperature_max, color="Historique"),
-                  alpha=0.2)+
+      # geom_ribbon(data = data_hist,
+      #             aes(x=annee, ymin =Temperature_min, ymax=Temperature_max, color="Historique"),
+      #             alpha=0.2)+
       
-      # 3. Le Scénario choisi (Rubbon Min/Max + Ligne Moyenne)
+      # Le Scénario choisi
       geom_ribbon(data = data_proj_selected,
                   aes(x = annee, ymin = Temperature_min, ymax = Temperature_max, fill = Contexte),
                   alpha = 0.2) +
       
-      geom_line(data = data_proj_selected,
-                aes(x = annee, y = Temperature_moyenne, color = Contexte),
-                linewidth = 1.5) +
+      # geom_line(data = data_proj_selected,
+      #           aes(x = annee, y = Temperature_moyenne, color = Contexte),
+      #           linewidth = 1.5) +
       
       # Esthétique
       scale_color_manual(values = c("Historique" = "#2c3e50", "rcp26" = "#2ecc71", "rcp45" = "#f39c12", "rcp85" = "#e74c3c")) +

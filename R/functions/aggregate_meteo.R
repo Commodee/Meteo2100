@@ -16,7 +16,7 @@ aggregate_meteo <- function(data,
     data <- data %>% filter(.data[[col_geo]] == choix_geo)
   }
   
-  # 2. Calcul Période (Logique R standard, Arrow gère bien floor_date maintenant)
+  # 2. Calcul Période
   data <- data %>%
     mutate(
       TM = as.numeric(TM),

@@ -95,8 +95,17 @@ process_one_resource <- function(resource, dept_code, output_dir, ref_geo, verbo
             MOIS = month(DATE)
           )
         
-        if (!is.null(ref_geo)) {
+        if (!is.null(ref_geo) & dept_code!=20) {
           df_clean <- left_join(df_clean, ref_geo, by = "CODE_DEPT")
+        } else { # Probleme avec la corse, on tekecharge avec 20, mais ref geo attend 2a et 2b
+          ref_geo_corse <- data.frame(
+            CODE_DEPT = "20",
+            NOM_DEPT = "Corse",
+            CODE_REGION = "94",
+            NOM_REGION = "Corse",
+            stringsAsFactors = FALSE
+          )
+          df_clean <- left_join(df_clean, ref_geo_corse, by = "CODE_DEPT")
         }
         
         write_parquet(df_clean, output_file)

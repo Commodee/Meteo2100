@@ -26,16 +26,24 @@ load_raw_data <- function() {
                        "80", "81", "82", "83", "84", "85", "86", "87", "88", "89",
                        "90", "91", "92", "93", "94", "95","971", "972", "973", "974", "976")
   
-  #download_meteo_multi_parquet(liste_depts ,output_dir = dossier_parquet, mode = "full")
+  # download_meteo_multi_parquet(liste_depts ,output_dir = dossier_parquet, mode = "full")
   
   
   
   data_meteo_arrow <- arrow::open_dataset(dossier_parquet)
   
+  meteo_nationale <- aggregate_meteo(data_meteo_arrow, "jour", "Nationale")
+  meteo_regionale <- aggregate_meteo(data_meteo_arrow, "jour", "Régionale")
+  meteo_departementale <- aggregate_meteo(data_meteo_arrow, "jour", "Départementale")
+  
+  
   return(list(
     regions = france_regions,
     departements = france_departements,
-    meteo = data_meteo_arrow 
+    meteo = data_meteo_arrow,
+    meteo_nationale = meteo_nationale,
+    meteo_regionale= meteo_regionale,
+    meteo_departementale = meteo_departementale
   )
   )
 }

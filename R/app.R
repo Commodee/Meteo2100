@@ -82,7 +82,7 @@ ui <- fluidPage(
           radioButtons(
             inputId = "situation_tempo",
             label = "Temporalité",
-            choices = c("Jour" = "jour", 
+            choices = c("Jour (Attention, le graphique peut mettre du temps a apparaitre)" = "jour", 
                         "Mois" = "mois", 
                         "Année" = "annee"),
             selected = "annee"
@@ -127,7 +127,7 @@ ui <- fluidPage(
           radioButtons(
             inputId = "carte_tempo",
             label = "Temporalité",
-            choices = c("Jour" = "jour", 
+            choices = c("Jour  (Attention, le graphique peut mettre du temps a apparaitre)" = "jour", 
                         "Mois" = "mois", 
                         "Année" = "annee"),
             selected = "annee"

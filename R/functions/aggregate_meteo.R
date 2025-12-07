@@ -25,10 +25,7 @@ aggregate_meteo <- function(data,
       RR = as.numeric(RR)
     )
   
-  # arrow ne supporte pas le case when
-  if (granularite_temps == "semaine") {
-    data <- data %>% mutate(periode = floor_date(DATE, "week"))
-  } else if (granularite_temps == "mois") {
+  if (granularite_temps == "mois") {
     data <- data %>% mutate(periode = floor_date(DATE, "month"))
   } else if (granularite_temps == "annee") {
     data <- data %>% mutate(periode = floor_date(DATE, "year"))

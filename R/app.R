@@ -48,6 +48,8 @@ vec_commune <- global_data$meteo %>%
 # ui ----------------------------------------------------------------------
 ui <- fluidPage(
   autoWaiter(id="plot1",html = spin_3(), color = "white"),
+  autoWaiter(id="carte_interactive",html = spin_3(), color = "white"),
+  
   titlePanel("Météo2100"),
   tabsetPanel(
     type = "tab",
@@ -102,7 +104,16 @@ ui <- fluidPage(
       "Carte en folie",
       sidebarLayout(
         sidebarPanel(
+          width = 3,
           h1("Sidebar"),
+          radioButtons(
+            inputId = "carte_plot",
+            label = "On affiche quoi ?",
+            choices = c("Temperature", "Precipitation"),
+            selected = "Temperature"
+          ),
+          uiOutput("carte_temp_choix"),
+          hr(),
           # granularité
           radioButtons(
             inputId = "carte_ratio",
@@ -110,9 +121,22 @@ ui <- fluidPage(
             choices = c("Régionale", "Départementale"),
             selected = "Régionale"
           ),
+          
+          hr(),
+          
+          radioButtons(
+            inputId = "carte_tempo",
+            label = "Temporalité",
+            choices = c("Jour" = "jour", 
+                        "Mois" = "mois", 
+                        "Année" = "annee"),
+            selected = "annee"
+          ),
+          uiOutput("carte_date_choix")
         ), # sidebarPanel
         
         mainPanel(
+          width = 9,
           h1("Carte"),
           leafletOutput("carte_interactive", height = "80vh")
         ) # mainPanel
@@ -268,7 +292,6 @@ server <- function(input, output, session) {
     
     # --- 2. FILTRAGE DES DONNÉES ---
     # On filtre les données Arrow AVANT de les envoyer au plot
-    # Cela rend l'appli beaucoup plus rapide
     date_debut <- input$plage_dates[1]
     date_fin   <- input$plage_dates[2]
     
@@ -302,17 +325,107 @@ server <- function(input, output, session) {
   
   
   # ---- Tab Carte ----
-  output$carte_interactive <- renderLeaflet({
-    data_map <- if (input$carte_ratio == "Départementale") {
-      global_data$departements
+  output$carte_temp_choix <- renderUI({
+    if (input$carte_plot == "Temperature") {
+      radioButtons(
+        inputId = "Carte_temp_choix",
+        label = "Quelle temperature ?",
+        choices = c("Temperature max", "Temperature min", "Temperature moy"),
+        selected = "Temperature moy"
+      )
     } else {
-      global_data$regions
+      NULL
+    }
+  })
+  
+  # Selcteur de date
+  output$carte_date_choix <- renderUI({
+    req(input$carte_tempo)
+    
+    if (input$carte_tempo == "annee") {
+      # CAS 1 : ANNÉE
+      airDatepickerInput(
+        inputId = "carte_date",
+        label = "Quelle année :",
+        range = FALSE,
+        view = "years",
+        minView = "years",
+        dateFormat = "yyyy",
+        value = c("2025-01-01")
+      )
+      
+    } else if (input$carte_tempo == "mois") {
+      airDatepickerInput(
+        inputId = "carte_date",
+        label = "Quel mois :",
+        range = FALSE,
+        view = "years",
+        minView = "months",
+        dateFormat = "MM/yyyy",
+        value = c("2020-01-01")
+      )
+      
+    } else {
+      # CAS 3 : JOUR
+      airDatepickerInput(
+        inputId = "carte_date",
+        label = "Quel jour :",
+        range = FALSE,
+        view = "months",
+        minView = "days",
+        dateFormat = "dd/MM/yyyy",
+        value = "2025-12-01" 
+      )
+    }
+  })
+  
+  output$carte_interactive <- renderLeaflet({
+    req(input$carte_ratio, input$carte_date)
+    
+    if (input$carte_ratio == "Départementale") {
+      data_map <- global_data$departements
+      nom_col <- "NOM_DEPT"
+    } else {
+      data_map <- global_data$regions
+      nom_col <- "NOM_REGION"
     }
     
-    leaflet(data_map) %>%
+    data_meto <- aggregate_meteo(global_data$meteo, input$carte_tempo, input$carte_ratio) %>% 
+      filter(
+        periode == as.Date(input$carte_date)
+      )
+    
+    # if (input$carte_tempo == "annee") {
+    #   data_meto <- floor_date(data_meto, "periode")  # Transforme 2025-12-31 en 2025-01-01
+    # } else if (input$carte_tempo == "mois") {
+    #   data_meto <- floor_date(data_meto, "periode") # Transforme 2025-05-15 en 2025-05-01
+    # }
+
+    shiny::validate(
+      shiny::need(nrow(data_meto) > 0, paste("Pas de données météo disponibles pour la date :", as.Date(input$carte_date)))
+    )
+    
+    
+    
+    data_map_final <- data_map %>% 
+      left_join(data_meto, by = nom_col) %>% 
+      rename(nom = nom_col)
+    
+    if (!inherits(data_map_final, "sf")) {
+      data_map_final <- st_as_sf(data_map_final)
+    }
+    
+    pal <- colorNumeric(
+      palette = "RdYlBu", 
+      domain = data_map_final$Temperature_moyenne,
+      reverse = TRUE,
+      na.color = "#808080"
+    )
+    
+    leaflet(data_map_final) %>%
       addProviderTiles(providers$CartoDB.Positron) %>%
       addPolygons(
-        fillColor = "white",
+        fillColor = ~pal(Temperature_moyenne),
         color = "#2c3e50",    # Couleur des bordures
         weight = 1,           # Epaisseur du trait
         opacity = 1,
@@ -325,7 +438,13 @@ server <- function(input, output, session) {
           bringToFront = TRUE
         )
       ) %>%
-      # Centre la vue sur la France par défaut
+      addLegend(
+        pal = pal, 
+        values = ~Temperature_moyenne, 
+        opacity = 0.7, 
+        title = "Temp. Moy (°C)",
+        position = "bottomright"
+      ) %>% 
       setView(lng = 2.2137, lat = 46.2276, zoom = 6)
   })
   # ---- Tab Demain ----

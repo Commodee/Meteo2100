@@ -54,7 +54,7 @@ ui <- fluidPage(
   tabsetPanel(
     type = "tab",
     
-    # tab_situation
+    # tab_situation ----
     tabPanel(
       "Où en est on ?",
       sidebarLayout(
@@ -99,7 +99,7 @@ ui <- fluidPage(
       ) # sidebarLayout
     ), # tab_situation
     
-    # tab_carte
+    # tab_carte ----
     tabPanel(
       "Carte en folie",
       sidebarLayout(
@@ -143,7 +143,7 @@ ui <- fluidPage(
       ) # sidebarLayout
     ), # tab_carte
     
-    # tab_demain
+    # tab_demain ----
     tabPanel(
       "Et demain ?",
       sidebarLayout(
@@ -161,7 +161,7 @@ ui <- fluidPage(
           
           hr(),
           
-          # Choix du Scénario (Le cœur du sujet)
+          # Choix du Scénario
           radioButtons(
             inputId = "scenario_giec",
             label = "Scénario d'émissions (GIEC) :",
@@ -172,16 +172,7 @@ ui <- fluidPage(
             ),
             selected = "rcp45"
           ),
-          
-          # Horizon temporel
-          sliderInput(
-            inputId = "horizon_annee",
-            label = "Jusqu'à quelle année ?",
-            min = 2024, 
-            max = 2100, 
-            value = 2050,
-            sep = ""
-          )
+    
         ),
         
         mainPanel(
@@ -202,7 +193,7 @@ server <- function(input, output, session) {
   # ---- Tab Situation ----
   output$situation_gran_ui <- renderUI({
     switch(input$situation_gran,
-           "Communale" = selectInput("situation_commune", "Choisir la commune", vec_commune),
+           "Station Météo" = selectInput("situation_commune", "Choisir la commune", vec_commune),
            "Départementale" = selectInput("situation_dep", "Choisir le département", vec_dep),
            "Régionale" = selectInput("situation_reg", "Choisir la région", vec_region),
            "Nationale" = NULL
@@ -379,44 +370,41 @@ server <- function(input, output, session) {
     
     # 2. Choix Source
     if (input$carte_ratio == "Départementale") {
-      map_geo <- global_data$departements
+      map_geo    <- global_data$departements
       data_meteo <- global_data$meteo_departementale
-      key_col <- "NOM_DEPT"
+      key_col    <- "NOM_DEPT"
     } else {
-      map_geo <- global_data$regions
+      map_geo    <- global_data$regions
       data_meteo <- global_data$meteo_regionale
-      key_col <- "NOM_REGION"
+      key_col    <- "NOM_REGION"
     }
     
     # 3. Filtre Temporel
-    # On filtre d'abord l'année concernée pour aller vite
+    # On filtre d'abord l'année pour réduire la taille des données
     annee_cible <- year(date_cible)
     data_subset <- data_meteo %>% 
       filter(year(periode) == annee_cible) 
     
     # 4. Ré-agrégation & Sélection finale
-    # On transforme les jours en Mois/Année, PUIS on garde la date cible
+    # Transforme jour -> mois/année et garde la date cible
     data_final_meteo <- reaggregate_tempo(data_subset, input$carte_tempo) %>%
       filter(periode == date_cible)
     
-    shiny::validate(need(nrow(data_final_meteo) > 0, paste("Pas de données pour", date_cible)))
+    shiny::validate(
+      need(nrow(data_final_meteo) > 0, paste("Pas de données pour", date_cible))
+    )
     
-    # 5. Jointure & Carte
+    # 5. Jointure
     map_final <- map_geo %>% left_join(data_final_meteo, by = key_col)
     if (!inherits(map_final, "sf")) map_final <- st_as_sf(map_final)
     
-    pal <- colorNumeric("RdYlBu", domain = map_final$Temperature_moyenne, reverse = TRUE, na.color = "#808080")
-    
-    leaflet(map_final) %>%
-      addProviderTiles(providers$CartoDB.Positron) %>%
-      addPolygons(
-        fillColor = ~pal(Temperature_moyenne),
-        color = "#2c3e50", weight = 1, opacity = 1, fillOpacity = 0.6,
-        label = ~paste0(get(key_col), ": ", round(Temperature_moyenne, 1), "°C"),
-        highlightOptions = highlightOptions(weight = 3, color = "#e74c3c", bringToFront = TRUE)
-      ) %>%
-      addLegend(pal = pal, values = ~Temperature_moyenne, title = "Temp. Moy (°C)", position = "bottomright") %>%
-      setView(2.21, 46.22, 6)
+    # 6. Plot
+    plot_map_leaflet(
+      data_map        = map_final,
+      var_type        = input$carte_plot,        # "Temperature" ou "Precipitation"
+      temp_type       = input$Carte_temp_choix,  # "Temperature moy", etc.
+      col_name_region = key_col                  # "NOM_DEPT" ou "NOM_REGION"
+    )
   })
   # ---- Tab Demain ----
   
@@ -474,8 +462,7 @@ server <- function(input, output, session) {
         Temperature_moyenne = Temp_moy + offset,
         Temperature_min     = Temp_min + offset,
         Temperature_max     = Temp_max + offset
-      ) %>%
-      filter(annee <= input$horizon_annee)
+      )
     
     # Séparation : le scénario choisi vs les autres (pour le fond)
     data_proj_selected <- data_proj_final %>% filter(Contexte == input$scenario_giec)
@@ -495,16 +482,16 @@ server <- function(input, output, session) {
       # geom_ribbon(data = data_hist,
       #             aes(x=annee, ymin =Temperature_min, ymax=Temperature_max, color="Historique"),
       #             alpha=0.2)+
+      # 
+      # # Le Scénario choisi
+      # geom_ribbon(data = data_proj_selected,
+      #             aes(x = annee, ymin = Temperature_min, ymax = Temperature_max, fill = Contexte),
+      #             alpha = 0.2) +
       
-      # Le Scénario choisi
-      geom_ribbon(data = data_proj_selected,
-                  aes(x = annee, ymin = Temperature_min, ymax = Temperature_max, fill = Contexte),
-                  alpha = 0.2) +
-      
-      # geom_line(data = data_proj_selected,
-      #           aes(x = annee, y = Temperature_moyenne, color = Contexte),
-      #           linewidth = 1.5) +
-      
+      geom_line(data = data_proj_selected,
+                aes(x = annee, y = Temperature_moyenne, color = Contexte),
+                linewidth = 1.5) +
+
       # Esthétique
       scale_color_manual(values = c("Historique" = "#2c3e50", "rcp26" = "#2ecc71", "rcp45" = "#f39c12", "rcp85" = "#e74c3c")) +
       scale_fill_manual(values = c("rcp26" = "#2ecc71", "rcp45" = "#f39c12", "rcp85" = "#e74c3c")) +
@@ -513,7 +500,8 @@ server <- function(input, output, session) {
       labs(
         title = paste("Trajectoire :", input$demain_region),
         subtitle = paste("Ajustement (biais) appliqué :", round(offset, 1), "°C"),
-        y = "Température (°C)", x = NULL, fill = "Scénario", color = "Scénario"
+        y = "Température (°C)", x = NULL, fill = "Scénario", color = "Scénario",
+        caption = "Source: Météo-France & DRIAS"
       )
   })
     

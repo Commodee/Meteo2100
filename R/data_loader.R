@@ -3,8 +3,15 @@ load_raw_data <- function() {
   url_departements <- "https://raw.githubusercontent.com/gregoiredavid/france-geojson/master/departements.geojson"
   #url_communes <- "https://raw.githubusercontent.com/gregoiredavid/france-geojson/master/communes.geojson"
   
-  france_regions <- st_read(url_regions, quiet = FALSE)
-  france_departements <- st_read(url_departements, quiet = FALSE)
+  france_regions <- st_read(url_regions, quiet = FALSE) %>% rename(
+    NOM_REGION = nom
+    )
+    
+  france_departements <- st_read(url_departements, quiet = FALSE) %>% 
+    rename(
+      NOM_DEPT = nom
+    )
+    
   #france_communes <- st_read(url_communes, quiet = TRUE)
   
   dossier_parquet <- "../data/meteo_parquet"

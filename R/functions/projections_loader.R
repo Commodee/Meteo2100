@@ -1,5 +1,17 @@
+#' Traitement des fichiers de projections DRIAS
+#'
+#' Lit un fichier CSV brut de projections DRIAS, normalise les noms de colonnes,
+#' associe les années aux périodes (REF, H1, H2, H3) et identifie les scénarios RCP.
+#' Effectue ensuite une moyenne des indicateurs par contexte et par année.
+#'
+#' @param chemin_fichier Chaîne de caractères. Le chemin vers le fichier CSV brut.
+#'
+#' @return Un dataframe résumant les températures (moy, min, max) par \code{Contexte} et \code{annee}.
 process_drias_projections <- function(chemin_fichier) {
-  raw_data <- read.csv2(chemin_fichier, sep = ";", header = TRUE, dec=".")
+  raw_data <- read.csv2(chemin_fichier,
+                        sep = ";",
+                        header = TRUE,
+                        dec = ".")
   
   full_data <- raw_data %>%
     mutate(

@@ -139,3 +139,57 @@ plot_map_leaflet <- function(data_map,
     ) %>% 
     setView(lng = 2.2137, lat = 46.2276, zoom = 6)
 }
+
+#' Trace le graphique des projections climatiques
+plot_projection_graph <- function(data_hist, 
+                                  data_proj, 
+                                  scenario_choisi, 
+                                  titre, 
+                                  offset_val) {
+  
+  # Séparation : le scénario choisi vs les autres (pour le fond)
+  data_proj_selected <- data_proj %>% filter(Contexte == scenario_choisi)
+  data_proj_back     <- data_proj 
+  
+  ggplot() +
+    # 1. Tous les scénarios en arrière-plan (pointillés gris)
+    geom_line(data = data_proj_back, 
+              aes(x = annee, y = Temperature_moyenne, group = Contexte), 
+              color = "grey60", linetype = "dashed", alpha = 0.5) +
+    
+    # 2. L'historique (Trait plein sombre)
+    geom_line(data = data_hist, 
+              aes(x = annee, y = Temperature_moyenne, color = "Historique"), 
+              linewidth = 1) +
+    
+    # 3. Le Scénario choisi (Trait coloré épais)
+    geom_line(data = data_proj_selected,
+              aes(x = annee, y = Temperature_moyenne, color = Contexte),
+              linewidth = 1.5) +
+    
+    # 4. Esthétique et Couleurs
+    scale_color_manual(values = c(
+      "Historique" = "#2c3e50", 
+      "rcp26"      = "#2ecc71", 
+      "rcp45"      = "#f39c12", 
+      "rcp85"      = "#e74c3c"
+    )) +
+    
+    geom_vline(xintercept = 2025, linetype = "dotted") +
+    
+    theme_minimal(base_size = 14) +
+    
+    labs(
+      title    = paste("Trajectoire :", titre),
+      subtitle = paste("Ajustement (biais) appliqué :", round(offset_val, 1), "°C"),
+      y        = "Température (°C)", 
+      x        = NULL, 
+      color    = "Scénario",
+      caption  = "Source: Météo-France & DRIAS"
+    ) +
+    theme(
+      plot.title    = element_text(face = "bold", color = "#2c3e50"),
+      plot.subtitle = element_text(size = 10, color = "#7f8c8d"),
+      legend.position = "bottom"
+    )
+}

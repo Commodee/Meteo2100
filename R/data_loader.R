@@ -32,7 +32,7 @@ load_raw_data <- function() {
     message("Données météo introuvables. Téléchargement depuis HuggingFace...")
     
     
-    zip_url <- "https://huggingface.co/datasets/torvikk/meteo2100/resolve/main/meteo_parquet.zip?download=true"
+    zip_url <- "https://huggingface.co/datasets/meteo2100/meteo2100/resolve/main/meteo_parquet.zip?download=true"
     dest_zip <- file.path(data_dir, "meteo_parquet.zip")
     
     tryCatch({

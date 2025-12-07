@@ -33,7 +33,6 @@ list_dataset_resources <- function(dataset_id, verbose = TRUE) {
         titre = r$title,
         id = r$id,
         url = r$url,
-        # Extraction de la période pour filtrage futur
         periode_str = str_extract(r$title, "periode_(\\d{4})-(\\d{4})")
       )
     })
@@ -41,7 +40,10 @@ list_dataset_resources <- function(dataset_id, verbose = TRUE) {
     warning("Erreur API data.gouv: ", conditionMessage(e))
     return(NULL)
   })
-}
+})
+
+#' Référentiel géo en cache global
+.ref_geo_cache <- NULL
 
 
 #' Récupérer le référentiel géographique officiel
@@ -112,18 +114,18 @@ process_one_resource <- function(resource,
                     timeout(600))
     
     if (status_code(response) == 200) {
-      df <- read_csv2(
+      df <- data.table::fread(
         tmp_csv,
-        locale = locale(encoding = "UTF-8"),
-        col_types = cols(.default = col_character()),
-        show_col_types = FALSE,
-        progress = FALSE
+        sep = ";",
+        encoding = "UTF-8",
+        colClasses = "character",
+        showProgress = FALSE
       )
       
       col_date <- intersect(names(df), c("AAAAMMJJ", "DATE"))[1]
       
       if (!is.na(col_date)) {
-        df_clean <- df %>%
+        df_clean <- as_tibble(df) %>%
           rename(DATE = all_of(col_date)) %>%
           mutate(
             CODE_DEPT = dept_code,
@@ -131,9 +133,10 @@ process_one_resource <- function(resource,
             TM = as.numeric(TM),
             TN = as.numeric(TN),
             TX = as.numeric(TX),
-            RR = as.numeric(RR)
-          ) %>%
-          mutate(ANNEE = year(DATE), MOIS = month(DATE))
+            RR = as.numeric(RR),
+            ANNEE = year(DATE),
+            MOIS = month(DATE)
+          )
         
         if (!is.null(ref_geo) & dept_code != 20) {
           df_clean <- left_join(df_clean, ref_geo, by = "CODE_DEPT")
@@ -183,6 +186,8 @@ download_meteo_multi_parquet <- function(departements,
                                          mode = "full",
                                          annee = NULL,
                                          output_dir = "../data/meteo_parquet",
+                                         parallel = TRUE,
+                                         n_cores = 4,
                                          verbose = TRUE) {
   if (!dir.exists(output_dir))
     dir.create(output_dir, recursive = TRUE)
@@ -196,48 +201,78 @@ download_meteo_multi_parquet <- function(departements,
   if (is.null(all_resources))
     return(NULL)
   
-  for (dept in departements) {
-    log_msg(paste0("\nTraite Dept: ", dept), verbose = verbose)
+  # === MODE PARALLÈLE ===
+  if (parallel && length(departements) > 1) {
+    library(future)
+    library(furrr)
     
     # 1. Identifier les ressources du département
     pattern_dept <- paste0("departement_", dept, "_")
     dept_res <- all_resources %>%
       filter(str_detect(titre, fixed(pattern_dept, ignore_case = TRUE)), str_detect(titre, "RR-T-Vent"))
     
-    if (nrow(dept_res) == 0) {
-      log_msg("   Aucune donnée trouvée.", verbose = verbose)
-      next
-    }
+    plan(multisession, workers = min(n_cores, length(departements)))
     
-    # 2. Analyser les années
-    dept_res <- dept_res %>%
-      mutate(start_year = as.numeric(str_extract(periode_str, "\\d{4}")),
-             end_year   = as.numeric(str_extract(periode_str, "(?<=-\\d{0,3})\\d{4}"))) %>%
-      filter(end_year >= 1950) # On ignore l'avant-1950
+    log_msg(paste("Mode PARALLÈLE activé :", n_cores, "cœurs"), verbose = verbose)
     
-    # 3. Filtrage "Mode Light" (Uniquement fichiers récents > 2024)
-    if (mode == "light") {
-      dept_res <- dept_res %>% filter(start_year >= 2024)
-      if (nrow(dept_res) == 0) {
-        log_msg("   [Info] Mode Light : Aucun fichier récent (2024+) trouvé.",
-                verbose = verbose)
-        next
-      }
-    }
+    future_walk(departements, function(dept) {
+      process_department(dept, all_resources, mode, annee, output_dir, ref_geo, verbose)
+    }, .options = furrr_options(seed = TRUE))
     
-    # 4. Lancer le traitement fichier par fichier
-    for (i in seq_len(nrow(dept_res))) {
-      res <- dept_res[i, ]
-      
-      # Filtre année spécifique optionnel
-      if (!is.null(annee)) {
-        if (annee < res$start_year || annee > res$end_year)
-          next
-      }
-      
-      process_one_resource(res, dept, output_dir, ref_geo, verbose = verbose)
-      gc(verbose = FALSE) # Force le nettoyage RAM
+    plan(sequential)  # Retour au mode séquentiel
+    
+  } else {
+    # === MODE SÉQUENTIEL ===
+    for (dept in departements) {
+      process_department(dept, all_resources, mode, annee, output_dir, ref_geo, verbose)
     }
   }
+  
   log_msg("\nTerminé !", verbose = verbose)
 }
+
+#' Fonction helper pour traiter un département (utilisée par parallélisation)
+process_department <- function(dept, all_resources, mode, annee, output_dir, ref_geo, verbose) {
+  log_msg(paste0("\nTraite Dept: ", dept), verbose = verbose)
+  
+  # 1. Identifier les ressources du département
+  pattern_dept <- paste0("departement_", dept, "_")
+  dept_res <- all_resources %>%
+    filter(str_detect(titre, fixed(pattern_dept, ignore_case = TRUE)), 
+           str_detect(titre, "RR-T-Vent"))
+  
+  if (nrow(dept_res) == 0) {
+    log_msg("   Aucune donnée trouvée.", verbose = verbose)
+    return(NULL)
+  }
+  
+  # 2. Analyser les années
+  dept_res <- dept_res %>%
+    mutate(
+      start_year = as.numeric(str_extract(periode_str, "\\d{4}")),
+      end_year   = as.numeric(str_extract(periode_str, "(?<=-)\\d{4}"))
+    ) %>%
+    filter(end_year >= 1950)
+  
+  # 3. Filtrage "Mode Light"
+  if (mode == "light") {
+    dept_res <- dept_res %>% filter(start_year >= 2024)
+    if (nrow(dept_res) == 0) {
+      log_msg("   [Info] Mode Light : Aucun fichier récent (2024+) trouvé.", verbose = verbose)
+      return(NULL)
+    }
+  }
+  
+  # 4. Traitement fichier par fichier
+  for (i in seq_len(nrow(dept_res))) {
+    res <- dept_res[i, ]
+    
+    if (!is.null(annee)) {
+      if (annee < res$start_year || annee > res$end_year) next
+    }
+    
+    process_one_resource(res, dept, output_dir, ref_geo, verbose = verbose)
+    gc(verbose = FALSE)
+  }
+}
+

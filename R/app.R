@@ -152,29 +152,27 @@ ui <- fluidPage(
           width = 3,
           h3("Projections 2100"),
           p("Simulez l'avenir selon les différents scénarios du GIEC."),
-          
-          # Choix géographique 
-          selectInput(
-            inputId = "demain_region",
-            label = "Choisir la région :",
-            choices = vec_region, 
-            selected = "Île-de-France"
-          ),
-          
           hr(),
           
-          # Choix du Scénario
+          radioButtons(
+            inputId = "demain_gran",
+            label = "Échelle :",
+            choices = c("Nationale", "Régionale", "Départementale"),
+            selected = "Régionale"
+          ),
+          uiOutput("demain_loc_ui"),
+          hr(),
+          
           radioButtons(
             inputId = "scenario_giec",
-            label = "Scénario d'émissions (GIEC) :",
+            label = "Scénario (GIEC) :",
             choices = c(
-              "Optimiste (RCP 2.6) - Accord de Paris" = "rcp26",
-              "Intermédiaire (RCP 4.5) - Politique actuelle" = "rcp45",
-              "Pessimiste (RCP 8.5) - 'Business as usual'" = "rcp85"
+              "Optimiste (RCP 2.6)" = "rcp26",
+              "Intermédiaire (RCP 4.5)" = "rcp45",
+              "Pessimiste (RCP 8.5)" = "rcp85"
             ),
             selected = "rcp45"
-          ),
-    
+          )
         ),
         
         mainPanel(
@@ -188,7 +186,7 @@ ui <- fluidPage(
           )
         )
       )
-    ),
+    )
 ))
 
 # server ------------------------------------------------------------------
@@ -435,12 +433,19 @@ server <- function(input, output, session) {
   })
   # ---- Tab Demain ----
   
-  # 1. Chargement des données DRIAS
-  drias_data <- reactive({
-    load_drias_projections()
+  # ---- Tab Demain : UI Dynamique ----
+  output$demain_loc_ui <- renderUI({
+    switch(input$demain_gran,
+           "Nationale"      = NULL,
+           "Régionale"      = selectInput("demain_region", "Région :", vec_region, selected = "Île-de-France"),
+           "Départementale" = selectInput("demain_dept", "Département :", vec_dep)
+    )
   })
   
-  # 2. Description
+  # Chargement DRIAS
+  drias_data <- reactive({ load_drias_projections() })
+  
+  # Description Scénario
   output$desc_scenario <- renderText({
     switch(input$scenario_giec,
            "rcp26" = "🟢 Scénario Optimiste (Accord de Paris) : Fortes réductions d'émissions. La température se stabilise vers 2050.",
@@ -449,41 +454,46 @@ server <- function(input, output, session) {
     )
   })
   
-  # 3. Le Graphique de Projection
+  # Graphique Projection
   output$plot_projection <- renderPlot({
-    req(input$demain_region)
+    if (input$demain_gran == "Régionale") req(input$demain_region)
+    if (input$demain_gran == "Départementale") req(input$demain_dept)
     
-    # --- A. Données Historiques ---
-    data_hist <- aggregate_meteo(
-      data = global_data$meteo,
-      granularite_temps = "annee",
-      niveau_geo = "Régionale",
-      choix_geo = input$demain_region
-    ) %>%
+    # 1. Récupération de l'Historique
+    if (input$demain_gran == "Nationale") {
+      data_source <- global_data$meteo_nationale
+      titre <- "France Métropolitaine"
+      
+    } else if (input$demain_gran == "Régionale") {
+      data_source <- global_data$meteo_regionale %>% 
+        filter(NOM_REGION == input$demain_region)
+      titre <- input$demain_region
+      
+    } else { # Départementale
+      data_source <- global_data$meteo_departementale %>% 
+        filter(NOM_DEPT == input$demain_dept)
+      titre <- input$demain_dept
+    }
+    
+    data_hist <- reaggregate_tempo(data_source, "annee") %>%
       mutate(
-        annee = year(periode), # Conversion date -> année pour alignement
+        annee = year(periode),
         scenario = "Historique"
       )
     
-    # --- B. Données Projections(DRIAS) ---
+    # 2. Récupération des Projections
     raw_proj <- drias_data()
+    shiny::validate(need(nrow(raw_proj) > 0, "Données DRIAS introuvables."))
     
-    shiny::validate(
-      need(nrow(raw_proj) > 0, "Les données de projections sont introuvables.")
-    )
-    
-    # --- C. Calcul du décalage (Offset) ---
-    # Moyenne Historique (1976-2005) vs Moyenne Modèle (2005)
+    # 3. Calcul du Biais (Offset)
+    # On cale la courbe DRIAS sur la réalité historique locale (période 1976-2005)
     ref_hist <- mean(data_hist$Temperature_moyenne[data_hist$annee %in% 1976:2005], na.rm = TRUE)
-    # Si pas assez de données historiques, on prend toute la moyenne dispo
-    if(is.na(ref_hist)) ref_hist <- mean(data_hist$Temperature_moyenne, na.rm = TRUE)
+    if(is.na(ref_hist)) ref_hist <- mean(data_hist$Temperature_moyenne, na.rm = TRUE) # Fallback
     
     ref_proj <- mean(raw_proj$Temp_moy[raw_proj$annee == 2005], na.rm = TRUE)
-    
     offset <- ref_hist - ref_proj
     
-    # --- D. Préparation des données Projections ---
-    # On harmonise les noms de colonnes avec ceux de aggregate_meteo
+    # 4. Ajustement des Projections
     data_proj_final <- raw_proj %>%
       mutate(
         Temperature_moyenne = Temp_moy + offset,
@@ -491,45 +501,14 @@ server <- function(input, output, session) {
         Temperature_max     = Temp_max + offset
       )
     
-    # Séparation : le scénario choisi vs les autres (pour le fond)
-    data_proj_selected <- data_proj_final %>% filter(Contexte == input$scenario_giec)
-    data_proj_back     <- data_proj_final 
-    
-    # --- E. Graphique ---
-    ggplot() +
-      # tous les scénarios en pointillé
-      geom_line(data = data_proj_back, 
-                aes(x = annee, y = Temperature_moyenne, group = Contexte), 
-                color = "grey60", linetype = "dashed", alpha = 0.5) +
-      
-      # L'historique
-      geom_line(data = data_hist, 
-                aes(x = annee, y = Temperature_moyenne, color = "Historique"), 
-                linewidth = 1) +
-      # geom_ribbon(data = data_hist,
-      #             aes(x=annee, ymin =Temperature_min, ymax=Temperature_max, color="Historique"),
-      #             alpha=0.2)+
-      # 
-      # # Le Scénario choisi
-      # geom_ribbon(data = data_proj_selected,
-      #             aes(x = annee, ymin = Temperature_min, ymax = Temperature_max, fill = Contexte),
-      #             alpha = 0.2) +
-      
-      geom_line(data = data_proj_selected,
-                aes(x = annee, y = Temperature_moyenne, color = Contexte),
-                linewidth = 1.5) +
-
-      # Esthétique
-      scale_color_manual(values = c("Historique" = "#2c3e50", "rcp26" = "#2ecc71", "rcp45" = "#f39c12", "rcp85" = "#e74c3c")) +
-      scale_fill_manual(values = c("rcp26" = "#2ecc71", "rcp45" = "#f39c12", "rcp85" = "#e74c3c")) +
-      geom_vline(xintercept = 2024, linetype = "dotted") +
-      theme_minimal(base_size = 14) +
-      labs(
-        title = paste("Trajectoire :", input$demain_region),
-        subtitle = paste("Ajustement (biais) appliqué :", round(offset, 1), "°C"),
-        y = "Température (°C)", x = NULL, fill = "Scénario", color = "Scénario",
-        caption = "Source: Météo-France & DRIAS"
-      )
+    # 5. Appel de la fonction de plot
+    plot_projection_graph(
+      data_hist       = data_hist,
+      data_proj       = data_proj_final,
+      scenario_choisi = input$scenario_giec,
+      titre           = titre,
+      offset_val      = offset
+    )
   })
     
 }

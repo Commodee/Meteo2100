@@ -72,3 +72,28 @@ aggregate_meteo <- function(data,
   
   return(result)
 }
+
+reaggregate_tempo <- function(data_jour, tempo) {
+  if (tempo == "jour") return(data_jour)
+  
+  # Définition de la période
+  if (tempo == "mois") {
+    data_jour <- data_jour %>% mutate(periode = floor_date(periode, "month"))
+  } else {
+    data_jour <- data_jour %>% mutate(periode = floor_date(periode, "year"))
+  }
+  
+  # On groupe par la nouvelle période (et par zone géo si présente)
+  cols_geo <- intersect(names(data_jour), c("NOM_DEPT", "NOM_REGION"))
+  vars_grp <- c("periode", cols_geo)
+  
+  data_jour %>%
+    group_by(across(all_of(vars_grp))) %>%
+    summarise(
+      Temperature_moyenne = mean(Temperature_moyenne, na.rm = TRUE),
+      Temperature_min     = mean(Temperature_min, na.rm = TRUE),
+      Temperature_max     = mean(Temperature_max, na.rm = TRUE),
+      Precipitation_mm_moy = sum(Precipitation_mm_moy, na.rm = TRUE),
+      .groups = "drop"
+    )
+}

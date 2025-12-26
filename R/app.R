@@ -60,14 +60,16 @@ ui <- page_navbar(
     success = "#34DBCA",
     info = "#9b59b6",
     warning = "#f39c12",
-    danger = "#e74c3c"
+    danger = "#e74c3c",
+    # base_font = font_google("Roboto"),
+    # heading_font = font_google("Montserrat")
   ),
   fillable = TRUE,
   
   header = tagList(
-    autoWaiter(id="plot1",html = spin_flower(), color = "rgba(255,255,255,0.9)"),
-    autoWaiter(id="carte_interactive",html = spin_flower(), color = "rgba(255,255,255,0.9)"),
-    autoWaiter(id="plot_projection",html = spin_flower(), color = "rgba(255,255,255,0.9)")
+    autoWaiter(id="plot1",html = spin_flower(), color = "rgba(52, 152, 219,0.8)"),
+    autoWaiter(id="carte_interactive",html = spin_flower(), color = "rgba(52, 152, 219,0.8)"),
+    autoWaiter(id="plot_projection",html = spin_flower(), color = "rgba(52, 152, 219,0.8)")
   ),
 
   # tab_situation ----
@@ -77,34 +79,63 @@ ui <- page_navbar(
     layout_sidebar(
       sidebar = sidebar(
         width = 350,
-        h4("Configuration"),
-        radioButtons(
-          inputId = "situation_plot",
-          label = "On affiche quoi ?",
-          choices = c("Temperature", "Precipitation"),
-          selected = "Temperature"
-        ),
-        uiOutput("situation_temp_choix"),
-        hr(),
-        radioButtons(
-          inputId = "situation_gran",
-          label = "Granularité",
-          choices = c("Nationale", "Régionale", "Départementale", "Station Météo"),
-          selected = "Nationale"
-        ),
-        uiOutput("situation_gran_ui"),
-        
-        hr(),
-        
-        radioButtons(
-          inputId = "situation_tempo",
-          label = "Temporalité",
-          choices = c("Jour (Attention, le graphique peut mettre du temps a apparaitre)" = "jour", 
-                      "Mois" = "mois", 
-                      "Année" = "annee"),
-          selected = "annee"
-        ),
-        uiOutput("date_range_ui")
+        accordion(
+        multiple = FALSE,
+        open = "Données",
+          
+          accordion_panel(
+            "Données",
+            icon = icon("database"),
+            
+            # Remplacement par prettyRadioButtons (plus joli)
+            prettyRadioButtons(
+              inputId = "situation_plot",
+              label = "Variable :",
+              choices = c("Temperature", "Precipitation"),
+              selected = "Temperature",
+              icon = icon("check"), 
+              status = "primary",
+              animation = "smooth"
+            ),
+            uiOutput("situation_temp_choix")
+          ),
+          accordion_panel(
+            "Choix du Territoire",
+            icon = icon("map-location-dot"),
+            
+            # Utilisation de boutons segments (plus modernes)
+            prettyRadioButtons(
+              inputId = "situation_gran",
+              label = "Échelle d'analyse :",
+              choices = c(
+                "France entière" = "Nationale", 
+                "Par Région" = "Régionale", 
+                "Par Département" = "Départementale", 
+                "Ville précise" = "Station Météo"
+              ),
+              selected = "Nationale",
+              status = "primary",
+              shape = "curve",
+              outline = TRUE,
+              animation = "pulse"
+            ),
+            uiOutput("situation_gran_ui")
+          ),
+          
+          accordion_panel(
+            "Temps",
+            icon = icon("calendar"),
+            prettyRadioButtons(
+              inputId = "situation_tempo",
+              label = "Fréquence :",
+              choices = c("Jour" = "jour", "Mois" = "mois", "Année" = "annee"),
+              selected = "annee",
+              status = "success",
+              shape = "curve"
+            ),
+            uiOutput("date_range_ui")
+          )
+        )
       ), # sidebar
       
       card(

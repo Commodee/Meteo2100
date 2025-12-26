@@ -1,5 +1,6 @@
 # load libraries ----------------------------------------------------------
 library(arrow)
+library(bslib)
 library(httr)
 library(leaflet)
 library(sf)
@@ -45,148 +46,154 @@ vec_commune <- global_data$meteo %>%
   pull(NOM_USUEL)
 
 # ui ----------------------------------------------------------------------
-ui <- fluidPage(
-  autoWaiter(id="plot1",html = spin_3(), color = "white"),
-  autoWaiter(id="carte_interactive",html = spin_3(), color = "white"),
-  autoWaiter(id="plot_projection",html = spin_3(), color = "white"),
+ui <- navbarPage(
+  title = "Météo2100",
+  theme = bs_theme(version = 5, bootswatch = "flatly", font_scale = 0.85),
   
-  titlePanel("Météo2100"),
-  tabsetPanel(
-    type = "tab",
-    
-    # tab_situation ----
-    tabPanel(
-      "Où en est on ?",
-      sidebarLayout(
-        sidebarPanel(
-          width = 3,
-          h1("Sidebar"),
-          radioButtons(
-            inputId = "situation_plot",
-            label = "On affiche quoi ?",
-            choices = c("Temperature", "Precipitation"),
-            selected = "Temperature"
-          ),
-          uiOutput("situation_temp_choix"),
-          hr(),
-          radioButtons(
-            inputId = "situation_gran",
-            label = "Granularité",
-            choices = c("Nationale", "Régionale", "Départementale", "Station Météo"),
-            selected = "Nationale"
-          ),
-          uiOutput("situation_gran_ui"),
-          
-          hr(),
-          
-          radioButtons(
-            inputId = "situation_tempo",
-            label = "Temporalité",
-            choices = c("Jour (Attention, le graphique peut mettre du temps a apparaitre)" = "jour", 
-                        "Mois" = "mois", 
-                        "Année" = "annee"),
-            selected = "annee"
-          ),
-          uiOutput("date_range_ui")
-        ), # sidebarPanel
+  header = tagList(
+    autoWaiter(id="plot1",html = spin_flower(), color = "rgba(255,255,255,0.9)"),
+    autoWaiter(id="carte_interactive",html = spin_flower(), color = "rgba(255,255,255,0.9)"),
+    autoWaiter(id="plot_projection",html = spin_flower(), color = "rgba(255,255,255,0.9)")
+  ),
+
+  # tab_situation ----
+  tabPanel(
+    "Où en est on ?",
+    sidebarLayout(
+      sidebarPanel(
+        width = 3,
+        h1("Sidebar"),
+        radioButtons(
+          inputId = "situation_plot",
+          label = "On affiche quoi ?",
+          choices = c("Temperature", "Precipitation"),
+          selected = "Temperature"
+        ),
+        uiOutput("situation_temp_choix"),
+        hr(),
+        radioButtons(
+          inputId = "situation_gran",
+          label = "Granularité",
+          choices = c("Nationale", "Régionale", "Départementale", "Station Météo"),
+          selected = "Nationale"
+        ),
+        uiOutput("situation_gran_ui"),
         
-        mainPanel(
-          width = 9,
-          h1("Graphs et indicateurs"),
-          textOutput("text"),
-          plotOutput("plot1", height = "600px")
-        ) # mainPanel
-      ) # sidebarLayout
-    ), # tab_situation
-    
-    # tab_carte ----
-    tabPanel(
-      "Carte en folie",
-      sidebarLayout(
-        sidebarPanel(
-          width = 3,
-          h1("Sidebar"),
-          radioButtons(
-            inputId = "carte_plot",
-            label = "On affiche quoi ?",
-            choices = c("Temperature", "Precipitation"),
-            selected = "Temperature"
-          ),
-          uiOutput("carte_temp_choix"),
-          hr(),
-          # granularité
-          radioButtons(
-            inputId = "carte_ratio",
-            label = "Granularité",
-            choices = c("Régionale", "Départementale"),
-            selected = "Régionale"
-          ),
-          
-          hr(),
-          
-          radioButtons(
-            inputId = "carte_tempo",
-            label = "Temporalité",
-            choices = c("Jour  (Attention, le graphique peut mettre du temps a apparaitre)" = "jour", 
-                        "Mois" = "mois", 
-                        "Année" = "annee"),
-            selected = "annee"
-          ),
-          uiOutput("carte_date_choix")
-        ), # sidebarPanel
+        hr(),
         
-        mainPanel(
-          width = 9,
-          h1("Carte"),
-          leafletOutput("carte_interactive", height = "80vh")
-        ) # mainPanel
-      ) # sidebarLayout
-    ), # tab_carte
-    
-    # tab_demain ----
-    tabPanel(
-      "Et demain ?",
-      sidebarLayout(
-        sidebarPanel(
-          width = 3,
-          h3("Projections 2100"),
-          p("Simulez l'avenir selon les différents scénarios du GIEC."),
-          hr(),
-          
-          radioButtons(
-            inputId = "demain_gran",
-            label = "Échelle :",
-            choices = c("Nationale", "Régionale", "Départementale"),
-            selected = "Régionale"
-          ),
-          uiOutput("demain_loc_ui"),
-          hr(),
-          
-          radioButtons(
-            inputId = "scenario_giec",
-            label = "Scénario (GIEC) :",
-            choices = c(
-              "Optimiste (RCP 2.6)" = "rcp26",
-              "Intermédiaire (RCP 4.5)" = "rcp45",
-              "Pessimiste (RCP 8.5)" = "rcp85"
-            ),
-            selected = "rcp45"
-          )
+        radioButtons(
+          inputId = "situation_tempo",
+          label = "Temporalité",
+          choices = c("Jour (Attention, le graphique peut mettre du temps a apparaitre)" = "jour", 
+                      "Mois" = "mois", 
+                      "Année" = "annee"),
+          selected = "annee"
+        ),
+        uiOutput("date_range_ui")
+      ), # sidebarPanel
+      
+      mainPanel(
+        width = 9,
+        h1("Graphs et indicateurs"),
+        textOutput("text"),
+        plotOutput("plot1", height = "600px")
+      ) # mainPanel
+    ) # sidebarLayout
+  ), # tab_situation
+  
+  # tab_carte ----
+  tabPanel(
+    "Carte en folie",
+    sidebarLayout(
+      sidebarPanel(
+        width = 3,
+        h1("Sidebar"),
+        radioButtons(
+          inputId = "carte_plot",
+          label = "On affiche quoi ?",
+          choices = c("Temperature", "Precipitation"),
+          selected = "Temperature"
+        ),
+        uiOutput("carte_temp_choix"),
+        hr(),
+        # granularité
+        radioButtons(
+          inputId = "carte_ratio",
+          label = "Granularité",
+          choices = c("Régionale", "Départementale"),
+          selected = "Régionale"
         ),
         
-        mainPanel(
-          width = 9,
-          h2("Trajectoire de température"),
-          plotOutput("plot_projection", height = "500px"),
-          br(),
-          wellPanel(
-            h4("Détails du scénario"),
-            textOutput("desc_scenario")
-          )
+        hr(),
+        
+        radioButtons(
+          inputId = "carte_tempo",
+          label = "Temporalité",
+          choices = c("Jour  (Attention, le graphique peut mettre du temps a apparaitre)" = "jour", 
+                      "Mois" = "mois", 
+                      "Année" = "annee"),
+          selected = "annee"
+        ),
+        uiOutput("carte_date_choix")
+      ), # sidebarPanel
+      
+      mainPanel(
+        width = 9,
+        h1("Carte"),
+        leafletOutput("carte_interactive", height = "80vh")
+      ) # mainPanel
+    ) # sidebarLayout
+  ), # tab_carte
+  
+  # tab_demain ----
+  tabPanel(
+    "Et demain ?",
+    sidebarLayout(
+      sidebarPanel(
+        width = 3,
+        h3("Projections 2100"),
+        p("Simulez l'avenir selon les différents scénarios du GIEC."),
+        hr(),
+        
+        radioButtons(
+          inputId = "demain_gran",
+          label = "Échelle :",
+          choices = c("Nationale", "Régionale", "Départementale"),
+          selected = "Régionale"
+        ),
+        uiOutput("demain_loc_ui"),
+        hr(),
+        
+        radioButtons(
+          inputId = "scenario_giec",
+          label = "Scénario (GIEC) :",
+          choices = c(
+            "Optimiste (RCP 2.6)" = "rcp26",
+            "Intermédiaire (RCP 4.5)" = "rcp45",
+            "Pessimiste (RCP 8.5)" = "rcp85"
+          ),
+          selected = "rcp45"
+        )
+      ),
+      
+      mainPanel(
+        width = 9,
+        h2("Trajectoire de température"),
+        plotOutput("plot_projection", height = "500px"),
+        br(),
+        wellPanel(
+          h4("Détails du scénario"),
+          textOutput("desc_scenario")
         )
       )
     )
-))
+  ),
+  # footer ----
+  footer = tags$footer(
+    style = "background-color: #f8f9fa; padding: 5px; text-align: center; margin-top: 10px; border-top: 1px solid #e7e7e7; font-size: 0.8em;",
+    p("Fait par : Victor Frison, Adrien Mathier, Jonas Carlu", style = "margin: 0; color: #6c757d;")
+  )
+)
 
 # server ------------------------------------------------------------------
 server <- function(input, output, session) {

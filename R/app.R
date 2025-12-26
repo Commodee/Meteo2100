@@ -46,7 +46,7 @@ vec_commune <- global_data$meteo %>%
   pull(NOM_USUEL)
 
 # ui ----------------------------------------------------------------------
-ui <- navbarPage(
+ui <- page_navbar(
   title = "Météo2100",
   theme = bs_theme(version = 5, bootswatch = "flatly", font_scale = 0.85),
   
@@ -57,12 +57,13 @@ ui <- navbarPage(
   ),
 
   # tab_situation ----
-  tabPanel(
+  nav_panel(
     "Où en est on ?",
-    sidebarLayout(
-      sidebarPanel(
-        width = 3,
-        h1("Sidebar"),
+    icon = icon("chart-line"),
+    layout_sidebar(
+      sidebar = sidebar(
+        width = 350,
+        h4("Configuration"),
         radioButtons(
           inputId = "situation_plot",
           label = "On affiche quoi ?",
@@ -90,24 +91,25 @@ ui <- navbarPage(
           selected = "annee"
         ),
         uiOutput("date_range_ui")
-      ), # sidebarPanel
+      ), # sidebar
       
-      mainPanel(
-        width = 9,
-        h1("Graphs et indicateurs"),
+      card(
+        full_screen = TRUE,
+        card_header("Visualisation des données historiques"),
         textOutput("text"),
-        plotOutput("plot1", height = "600px")
-      ) # mainPanel
-    ) # sidebarLayout
+        plotOutput("plot1", height = "500px")
+      ) # card
+    ) # layout_sidebar
   ), # tab_situation
   
   # tab_carte ----
-  tabPanel(
+  nav_panel(
     "Carte en folie",
-    sidebarLayout(
-      sidebarPanel(
-        width = 3,
-        h1("Sidebar"),
+    icon = icon("map-marked-alt"),
+    layout_sidebar(
+      sidebar = sidebar(
+        width = 350,
+        h4("Configuration"),
         radioButtons(
           inputId = "carte_plot",
           label = "On affiche quoi ?",
@@ -135,23 +137,26 @@ ui <- navbarPage(
           selected = "annee"
         ),
         uiOutput("carte_date_choix")
-      ), # sidebarPanel
+      ), # sidebar
       
-      mainPanel(
-        width = 9,
-        h1("Carte"),
-        leafletOutput("carte_interactive", height = "80vh")
-      ) # mainPanel
-    ) # sidebarLayout
+      card(
+        full_screen = TRUE,
+        card_header("Exploration Cartographique"),
+        card_body(
+          padding = 0,
+          leafletOutput("carte_interactive", height = "500px")
+        )
+      )
+    ) # layout_sidebar
   ), # tab_carte
   
   # tab_demain ----
-  tabPanel(
+  nav_panel(
     "Et demain ?",
-    sidebarLayout(
-      sidebarPanel(
-        width = 3,
-        h3("Projections 2100"),
+    layout_sidebar(
+      sidebar = sidebar(
+        width = 350,
+        h4("Configuration"),
         p("Simulez l'avenir selon les différents scénarios du GIEC."),
         hr(),
         
@@ -176,11 +181,9 @@ ui <- navbarPage(
         )
       ),
       
-      mainPanel(
-        width = 9,
-        h2("Trajectoire de température"),
+      card(
+        card_header("Trajectoire de température"),
         plotOutput("plot_projection", height = "500px"),
-        br(),
         wellPanel(
           h4("Détails du scénario"),
           textOutput("desc_scenario")

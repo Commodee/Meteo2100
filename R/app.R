@@ -47,8 +47,22 @@ vec_commune <- global_data$meteo %>%
 
 # ui ----------------------------------------------------------------------
 ui <- page_navbar(
-  title = "Météo2100",
-  theme = bs_theme(version = 5, bootswatch = "flatly", font_scale = 0.85),
+  title = div(
+    icon("cloud-sun"), 
+    "Météo2100",
+    style = "font-weight: bold; font-size: 1.3em; margin-right: 30px; color: white;"
+  ),
+  theme = bs_theme(
+    version = 5, 
+    bootswatch = "flatly", 
+    font_scale = 0.9,
+    primary = "#3498db",
+    success = "#34DBCA",
+    info = "#9b59b6",
+    warning = "#f39c12",
+    danger = "#e74c3c"
+  ),
+  fillable = TRUE,
   
   header = tagList(
     autoWaiter(id="plot1",html = spin_flower(), color = "rgba(255,255,255,0.9)"),
@@ -193,7 +207,7 @@ ui <- page_navbar(
   ),
   # footer ----
   footer = tags$footer(
-    style = "background-color: #f8f9fa; padding: 5px; text-align: center; margin-top: 10px; border-top: 1px solid #e7e7e7; font-size: 0.8em;",
+    style = "background-color: #f8f9fa; padding: 5px; text-align: center; border-top: 1px solid #e7e7e7; font-size: 0.8em;",
     p("Fait par : Victor Frison, Adrien Mathier, Jonas Carlu", style = "margin: 0; color: #6c757d;")
   )
 )

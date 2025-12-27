@@ -15,6 +15,7 @@ library(waiter)
 source("data_loader.R")
 
 source("functions/aggregate_meteo.R")
+source("functions/climate_data_downloader.R")
 source("functions/plot.R")
 source("functions/projections_loader.R")
 
@@ -227,6 +228,25 @@ ui <- page_navbar(
   ),
   # tab_demain
 
+  # tab_update ----
+  nav_panel(
+    "Mise à jour",
+    icon = icon("sync"),
+    card(
+      card_header("Mise à jour des données météorologiques"),
+      p("Les données de base (Hugging Face) s'arrêtent au 27/11/2025."),
+      p("Pour obtenir les données les plus récentes (2024-202x), vous pouvez lancer une mise à jour."),
+      p("Cette opération va :"),
+      tags$ul(
+        tags$li("Supprimer les fichiers Parquet existants pour la période 2024-202x."),
+        tags$li("Télécharger les dernières données disponibles depuis data.gouv.fr."),
+        tags$li("Recalculer les agrégations (fichiers RDS).")
+      ),
+      br(),
+      actionButton("btn_ask_update", "Lancer la mise à jour", class = "btn-warning", icon = icon("download"))
+    )
+  ),
+
   # footer ----
   footer = tags$footer(style = "background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); text-align: center; font-size: 0.9em; color: white;", p(
     "Fait par : Victor Frison • Adrien Mathier • Jonas Carlu"
@@ -247,14 +267,25 @@ server <- function(input, output, session) {
   # On l'affiche
   w$show()
 
-  # Chargement des données
-  global_data_reactive <- eventReactive(TRUE,
-    {
-      result <- load_raw_data()
-      result
-    },
-    ignoreNULL = FALSE
+  # Ecran de chargement pour la mise à jour
+  w_update <- Waiter$new(
+    html = tagList(
+      spin_refresh(),
+      h3("Mise à jour et Recalcul..."),
+      p("Cela peut prendre quelques minutes.")
+    ),
+    color = "rgba(52, 152, 219, 0.9)"
   )
+
+  # Trigger pour recharger les données
+  trigger_reload <- reactiveVal(0)
+
+  # Chargement des données
+  global_data_reactive <- reactive({
+    trigger_reload()
+    result <- load_raw_data()
+    result
+  })
 
   # Préparation des vecteurs de choix
   vec_dep <- reactive({
@@ -294,6 +325,7 @@ server <- function(input, output, session) {
     vec_commune()
     # on cache le loader quand tout est chargé
     w$hide()
+    w_update$hide()
   })
 
   # ---- Tab Situation ----
@@ -680,6 +712,81 @@ server <- function(input, output, session) {
 
   # Onglet Demain
   outputOptions(output, "proj_ui_location_selector", suspendWhenHidden = FALSE)
+
+  # ---- Logique Mise à jour ----
+  observeEvent(input$btn_ask_update, {
+    showModal(modalDialog(
+      title = "Confirmation",
+      "Êtes-vous sûr de vouloir mettre à jour les données ? Cela peut prendre quelques minutes.",
+      footer = tagList(
+        modalButton("Annuler"),
+        actionButton("btn_confirm_update", "Confirmer", class = "btn-danger")
+      )
+    ))
+  })
+
+  observeEvent(input$btn_confirm_update, {
+    removeModal()
+
+    # On réutilise le loader principal pour bloquer l'écran pendant tout le processus
+    # Il sera caché automatiquement par l'observe() plus haut qui surveille global_data_reactive()
+    w_update$show()
+
+    tryCatch(
+      {
+        # 1. Suppression des fichiers Parquet récents (2024-2025)
+        parquet_dir <- "../data/meteo_parquet"
+        if (dir.exists(parquet_dir)) {
+          files <- list.files(parquet_dir, full.names = TRUE)
+          # On cherche les fichiers qui contiennent 2024 ou 2025 dans leur nom
+          files_to_delete <- files[grepl("2024", files)]
+          if (length(files_to_delete) > 0) {
+            unlink(files_to_delete, force = TRUE)
+          }
+        }
+
+        # 2. Téléchargement des nouvelles données
+        ref_geo <- get_referentiel_geo(verbose = FALSE)
+
+        if (!is.null(ref_geo)) {
+          download_meteo_multi_parquet(
+            departements = ref_geo$CODE_DEPT,
+            mode = "light",
+            output_dir = parquet_dir,
+            parallel = TRUE,
+            n_cores = 4,
+            verbose = FALSE
+          )
+        }
+
+        # 3. Suppression des RDS pour forcer le recalcul
+        rds_files <- c("meteo_nationale.rds", "meteo_regionale.rds", "meteo_departementale.rds")
+
+        # On essaie plusieurs chemins possibles pour être sûr de trouver les fichiers
+        dirs_to_try <- c("../data", "data", "./data")
+
+        for (d in dirs_to_try) {
+          paths <- file.path(d, rds_files)
+          existing_paths <- paths[file.exists(paths)]
+          if (length(existing_paths) > 0) {
+            unlink(existing_paths, force = TRUE)
+          }
+        }
+
+        # Petit nettoyage mémoire
+        gc()
+
+        # 4. Rechargement des données
+        trigger_reload(trigger_reload() + 1)
+
+        showNotification("Téléchargement terminé. Traitement des données en cours...", type = "message")
+      },
+      error = function(e) {
+        w_update$hide()
+        showNotification(paste("Erreur :", e$message), type = "error")
+      }
+    )
+  })
 }
 
 # app ---------------------------------------------------------------------

@@ -180,7 +180,7 @@ plot_map_leaflet <- function(data_map,
       position = "bottomright",
       opacity  = 0.7
     ) %>%
-    setView(lng = 2.2137, lat = 46.2276, zoom = 6)
+    setView(lng = 2.2137, lat = 46.2276, zoom = 5)
 }
 
 

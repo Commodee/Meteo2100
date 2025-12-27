@@ -75,7 +75,7 @@ ui <- page_navbar(
                 "France entière" = "Nationale",
                 "Par Région" = "Régionale",
                 "Par Département" = "Départementale",
-                "Ville précise" = "Station Météo"
+                "Station Météo" = "Station Météo"
               ),
               selected = "Nationale",
               status = "primary",
@@ -158,11 +158,9 @@ ui <- page_navbar(
               inputId = "map_input_temporal_scale",
               label = "Temporalité",
               choices = c(
-                "Jour  (Attention, le graphique peut mettre du temps a apparaitre)" = "jour",
-                "Mois" = "mois",
-                "Année" = "annee"
+                "Jour  (Attention, le graphique peut mettre du temps a apparaitre)" = "jour"
               ),
-              selected = "annee"
+              selected = "jour"
             ),
             uiOutput("map_ui_date_selector")
           )
@@ -301,7 +299,7 @@ server <- function(input, output, session) {
   # ---- Tab Situation ----
   output$sit_ui_location_selector <- renderUI({
     switch(input$sit_input_scale,
-      "Station Météo" = selectInput("sit_input_loc_commune", "Choisir la commune", vec_commune()),
+      "Station Météo" = selectInput("sit_input_loc_commune", "Choisir la station météo", vec_commune()),
       "Départementale" = selectInput("sit_input_loc_dept", "Choisir le département", vec_dep()),
       "Régionale" = selectInput("sit_input_loc_reg", "Choisir la région", vec_region()),
       "Nationale" = NULL

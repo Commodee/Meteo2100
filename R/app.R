@@ -11,7 +11,6 @@ library(tidyverse)
 library(waiter)
 
 
-
 # load externals scripts ----------------------------------------------------
 source("data_loader.R")
 
@@ -37,11 +36,10 @@ ui <- page_navbar(
     # heading_font = font_google("Montserrat")
   ),
   fillable = TRUE,
-
   header = tagList(
     useWaiter()
   ),
-  
+
   # tab_situation ----
   nav_panel(
     "Où en est on ?",
@@ -51,15 +49,13 @@ ui <- page_navbar(
       sidebar = sidebar(
         width = 350,
         accordion(
-          id = "acc_situation",
+          id = "sit_accordion",
           multiple = FALSE,
-          
           accordion_panel(
             "Données",
             icon = icon("database"),
-            
             radioGroupButtons(
-              inputId = "situation_plot",
+              inputId = "sit_input_var_type",
               label = "Variable :",
               choices = c("Temperature", "Precipitation"),
               selected = "Temperature",
@@ -67,14 +63,13 @@ ui <- page_navbar(
               justified = TRUE,
               checkIcon = list(yes = icon("check"))
             ),
-            uiOutput("ui_situation_temp_type")
+            uiOutput("sit_ui_temp_metric")
           ),
           accordion_panel(
             "Choix du Territoire",
             icon = icon("map-location-dot"),
-            
             prettyRadioButtons(
-              inputId = "situation_territoire",
+              inputId = "sit_input_scale",
               label = "Échelle d'analyse :",
               choices = c(
                 "France entière" = "Nationale",
@@ -88,14 +83,13 @@ ui <- page_navbar(
               outline = TRUE,
               animation = "pulse"
             ),
-            uiOutput("situation_territoire_ui")
+            uiOutput("sit_ui_location_selector")
           ),
-          
           accordion_panel(
             "Temps",
             icon = icon("calendar"),
             prettyRadioButtons(
-              inputId = "situation_tempo",
+              inputId = "sit_input_temporal_scale",
               label = "Fréquence :",
               choices = c(
                 "Jour" = "jour",
@@ -106,62 +100,59 @@ ui <- page_navbar(
               status = "success",
               shape = "curve"
             ),
-            uiOutput("date_range_ui")
+            uiOutput("sit_ui_date_range")
           )
         ) # accordion
       ),
       # sidebar
-      
+
       card(
         full_screen = TRUE,
         card_header("Visualisation des données historiques"),
-        textOutput("text"),
-        plotOutput("plot1", height = "500px") %>% withSpinner(color = "#3498db", type = 6)
+        textOutput("sit_text_info"),
+        plotOutput("sit_plot_history", height = "500px") %>% withSpinner(color = "#3498db", type = 6)
       ) # card
     ) # layout_sidebar
   ),
   # tab_situation
-  
+
   # tab_carte ----
   nav_panel(
     "Carte en folie",
-    value = "nav_carte",
+    value = "nav_map",
     icon = icon("map-marked-alt"),
     layout_sidebar(
       sidebar = sidebar(
         width = 350,
         accordion(
           multiple = FALSE,
-          id = "acc_carte",
-          
+          id = "map_accordion",
           accordion_panel(
             "Données",
             icon = icon("database"),
             radioButtons(
-              inputId = "carte_plot",
+              inputId = "map_input_var_type",
               label = "On affiche quoi ?",
               choices = c("Temperature", "Precipitation"),
               selected = "Temperature"
             ),
-            uiOutput("ui_carte_temp_type")
+            uiOutput("map_ui_temp_metric")
           ),
-          
           accordion_panel(
             "Choix du Territoire",
             icon = icon("map-location-dot"),
             radioButtons(
-              inputId = "carte_ratio",
+              inputId = "map_input_scale",
               label = "Granularité",
               choices = c("Régionale", "Départementale"),
               selected = "Régionale"
             )
           ),
-          
           accordion_panel(
             "Temps",
             icon = icon("calendar"),
             radioButtons(
-              inputId = "carte_tempo",
+              inputId = "map_input_temporal_scale",
               label = "Temporalité",
               choices = c(
                 "Jour  (Attention, le graphique peut mettre du temps a apparaitre)" = "jour",
@@ -170,51 +161,49 @@ ui <- page_navbar(
               ),
               selected = "annee"
             ),
-            uiOutput("carte_date_choix")
+            uiOutput("map_ui_date_selector")
           )
         ) # accordion
       ),
       # sidebar
-      
+
       card(
         full_screen = TRUE,
         card_header("Exploration Cartographique"),
-        card_body(padding = 0, leafletOutput("carte_interactive", height = "500px") %>% withSpinner(color = "#3498db", type = 6))
+        card_body(padding = 0, leafletOutput("map_output_leaflet", height = "500px") %>% withSpinner(color = "#3498db", type = 6))
       ) # card
     ) # layout_sidebar
   ),
   # tab_carte
-  
+
   # tab_demain ----
   nav_panel(
     "Et demain ?",
-    value = "nav_demain",
+    value = "nav_projection",
     icon = icon("hourglass"),
     layout_sidebar(
       sidebar = sidebar(
         width = 350,
         accordion(
           multiple = FALSE,
-          id = "acc_demain",
-          
+          id = "proj_accordion",
           accordion_panel(
             "Territoire",
             icon = icon("map-location-dot"),
             p("Simulez l'avenir selon les différents scénarios du GIEC."),
             radioButtons(
-              inputId = "demain_gran",
+              inputId = "proj_input_scale",
               label = "Échelle :",
               choices = c("Nationale", "Régionale", "Départementale"),
               selected = "Régionale"
             ),
-            uiOutput("demain_loc_ui")
+            uiOutput("proj_ui_location_selector")
           ),
-          
           accordion_panel(
             "Scénario Climatique",
             icon = icon("globe"),
             radioButtons(
-              inputId = "scenario_giec",
+              inputId = "proj_input_scenario",
               label = "Scénario (GIEC) :",
               choices = c(
                 "Optimiste (RCP 2.6)" = "rcp26",
@@ -227,22 +216,22 @@ ui <- page_navbar(
         ) # accordion
       ),
       # sidebar
-    
+
       card(
         card_header("Trajectoire de température"),
-        plotOutput("plot_projection", height = "500px") %>% withSpinner(color = "#3498db", type = 6),
-        wellPanel(h4("Détails du scénario"), textOutput("desc_scenario"))
+        plotOutput("proj_plot_trajectory", height = "500px") %>% withSpinner(color = "#3498db", type = 6),
+        wellPanel(h4("Détails du scénario"), textOutput("proj_text_scenario_desc"))
       ) # card
     ) # layout_sidebar
   ),
   # tab_demain
-  
+
   # footer ----
   footer = tags$footer(style = "background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); text-align: center; font-size: 0.9em; color: white;", p(
     "Fait par : Victor Frison • Adrien Mathier • Jonas Carlu"
   ))
-  )
-  
+)
+
 # server ------------------------------------------------------------------
 server <- function(input, output, session) {
   # Création de l'écran de chargement
@@ -256,12 +245,15 @@ server <- function(input, output, session) {
   )
   # On l'affiche
   w$show()
-  
+
   # Chargement des données
-  global_data_reactive <- eventReactive(TRUE, {
-    result <- load_raw_data()
-    result
-  }, ignoreNULL = FALSE)
+  global_data_reactive <- eventReactive(TRUE,
+    {
+      result <- load_raw_data()
+      result
+    },
+    ignoreNULL = FALSE
+  )
 
   # Préparation des vecteurs de choix
   vec_dep <- reactive({
@@ -290,7 +282,7 @@ server <- function(input, output, session) {
       collect() %>%
       pull(NOM_USUEL)
   })
-  
+
   # Logique de l'écran de chargement
   observe({
     req(global_data_reactive())
@@ -304,20 +296,19 @@ server <- function(input, output, session) {
   })
 
   # ---- Tab Situation ----
-  output$situation_territoire_ui <- renderUI({
-    switch(
-      input$situation_territoire,
-      "Station Météo" = selectInput("situation_commune", "Choisir la commune", vec_commune()),
-      "Départementale" = selectInput("situation_dep", "Choisir le département", vec_dep()),
-      "Régionale" = selectInput("situation_reg", "Choisir la région", vec_region()),
+  output$sit_ui_location_selector <- renderUI({
+    switch(input$sit_input_scale,
+      "Station Météo" = selectInput("sit_input_loc_commune", "Choisir la commune", vec_commune()),
+      "Départementale" = selectInput("sit_input_loc_dept", "Choisir le département", vec_dep()),
+      "Régionale" = selectInput("sit_input_loc_reg", "Choisir la région", vec_region()),
       "Nationale" = NULL
     )
   })
-  
-  output$ui_situation_temp_type <- renderUI({
-    if (input$situation_plot == "Temperature") {
+
+  output$sit_ui_temp_metric <- renderUI({
+    if (input$sit_input_var_type == "Temperature") {
       radioGroupButtons(
-        inputId = "situation_temp_type",
+        inputId = "sit_input_temp_metric",
         label = "Quelle temperature ?",
         choices = c(
           "Max",
@@ -334,16 +325,16 @@ server <- function(input, output, session) {
       NULL
     }
   })
-  
+
   # Selcteur de date
-  output$date_range_ui <- renderUI({
-    req(input$situation_tempo)
-    
-    if (input$situation_tempo == "annee") {
+  output$sit_ui_date_range <- renderUI({
+    req(input$sit_input_temporal_scale)
+
+    if (input$sit_input_temporal_scale == "annee") {
       # CAS 1 : ANNÉE
       # On veut choisir une plage d'années (ex: 1950 - 2023)
       airDatepickerInput(
-        inputId = "plage_dates",
+        inputId = "sit_input_date_range",
         label = "Période (Années) :",
         range = TRUE,
         view = "years",
@@ -351,12 +342,11 @@ server <- function(input, output, session) {
         dateFormat = "yyyy",
         value = c("1950-01-01", "2025-12-31")
       )
-      
-    } else if (input$situation_tempo == "mois") {
+    } else if (input$sit_input_temporal_scale == "mois") {
       # CAS 2 : MOIS
       # On sélectionne des mois et années (ex: Jan 2020 - Dec 2022)
       airDatepickerInput(
-        inputId = "plage_dates",
+        inputId = "sit_input_date_range",
         label = "Période (Mois) :",
         range = TRUE,
         view = "years",
@@ -364,12 +354,11 @@ server <- function(input, output, session) {
         dateFormat = "MM/yyyy",
         value = c("2020-01-01", "2023-12-31")
       )
-      
     } else {
       # CAS 3 : JOUR
       # On sélectionne des jours précis
       airDatepickerInput(
-        inputId = "plage_dates",
+        inputId = "sit_input_date_range",
         label = "Période (Jours) :",
         range = TRUE,
         view = "months",
@@ -380,24 +369,27 @@ server <- function(input, output, session) {
       )
     }
   })
-  
+
   # plot
-  output$plot1 <- renderPlot({
-    req(input$situation_territoire,
-        input$plage_dates,
-        input$situation_plot)
-    
-    date_deb <- as.Date(input$plage_dates[1])
-    date_fin <- as.Date(input$plage_dates[2])
-    if (input$situation_tempo == "annee")
+  output$sit_plot_history <- renderPlot({
+    req(
+      input$sit_input_scale,
+      input$sit_input_date_range,
+      input$sit_input_var_type
+    )
+
+    date_deb <- as.Date(input$sit_input_date_range[1])
+    date_fin <- as.Date(input$sit_input_date_range[2])
+    if (input$sit_input_temporal_scale == "annee") {
       date_fin <- as.Date(paste0(year(date_fin), "-12-31"))
-    
-    if (input$situation_territoire == "Station Météo") {
-      req(input$situation_commune)
-      
-      
+    }
+
+    if (input$sit_input_scale == "Station Météo") {
+      req(input$sit_input_loc_commune)
+
+
       data_filtered <- global_data_reactive()$meteo %>%
-        filter(NOM_USUEL == input$situation_commune) %>%
+        filter(NOM_USUEL == input$sit_input_loc_commune) %>%
         filter(DATE >= date_deb, DATE <= date_fin) %>%
         select(DATE, TM, TN, TX, RR) %>%
         collect() %>%
@@ -414,55 +406,55 @@ server <- function(input, output, session) {
           Temperature_max = as.numeric(Temperature_max),
           Precipitation_mm_moy = as.numeric(Precipitation_mm_moy)
         )
-      
-      titre <- input$situation_commune
-      
+
+      titre <- input$sit_input_loc_commune
     } else {
-      data_source <- switch(
-        input$situation_territoire,
+      data_source <- switch(input$sit_input_scale,
         "Nationale" = global_data_reactive()$meteo_nationale,
         "Régionale" = global_data_reactive()$meteo_regionale,
         "Départementale" = global_data_reactive()$meteo_departementale
       )
-      
+
       # Filtrage Géo
-      if (input$situation_territoire == "Régionale") {
-        req(input$situation_reg)
-        data_source <- data_source %>% filter(NOM_REGION == input$situation_reg)
-        titre <- input$situation_reg
-      } else if (input$situation_territoire == "Départementale") {
-        req(input$situation_dep)
-        data_source <- data_source %>% filter(NOM_DEPT == input$situation_dep)
-        titre <- input$situation_dep
+      if (input$sit_input_scale == "Régionale") {
+        req(input$sit_input_loc_reg)
+        data_source <- data_source %>% filter(NOM_REGION == input$sit_input_loc_reg)
+        titre <- input$sit_input_loc_reg
+      } else if (input$sit_input_scale == "Départementale") {
+        req(input$sit_input_loc_dept)
+        data_source <- data_source %>% filter(NOM_DEPT == input$sit_input_loc_dept)
+        titre <- input$sit_input_loc_dept
       } else {
         titre <- "France Entière"
       }
-      
+
       data_filtered <- data_source %>% filter(periode >= date_deb, periode <= date_fin)
     }
-    
+
     shiny::validate(need(nrow(data_filtered) > 0, "Pas de données sur cette période."))
-    
+
     # 2. Ré-agrégation Temporelle (si besoin)
-    data_ready <- reaggregate_tempo(data_filtered, input$situation_tempo)
-    
+    data_ready <- reaggregate_tempo(data_filtered, input$sit_input_temporal_scale)
+
     # 3. Plot
-    if (input$situation_plot == "Temperature") {
-      req(input$situation_temp_type)
-      plot_temp(data_ready,
-                titre,
-                input$situation_tempo,
-                input$situation_temp_type)
+    if (input$sit_input_var_type == "Temperature") {
+      req(input$sit_input_temp_metric)
+      plot_temp(
+        data_ready,
+        titre,
+        input$sit_input_temporal_scale,
+        input$sit_input_temp_metric
+      )
     } else {
-      plot_prec(data_ready, titre, input$situation_tempo)
+      plot_prec(data_ready, titre, input$sit_input_temporal_scale)
     }
   })
-  
+
   # ---- Tab Carte ----
-  output$ui_carte_temp_type <- renderUI({
-    if (input$carte_plot == "Temperature") {
+  output$map_ui_temp_metric <- renderUI({
+    if (input$map_input_var_type == "Temperature") {
       radioButtons(
-        inputId = "carte_temp_type",
+        inputId = "map_input_temp_metric",
         label = "Quelle temperature ?",
         choices = c("Temperature max", "Temperature min", "Temperature moy"),
         selected = "Temperature moy"
@@ -471,15 +463,15 @@ server <- function(input, output, session) {
       NULL
     }
   })
-  
+
   # Selcteur de date
-  output$carte_date_choix <- renderUI({
-    req(input$carte_tempo)
-    
-    if (input$carte_tempo == "annee") {
+  output$map_ui_date_selector <- renderUI({
+    req(input$map_input_temporal_scale)
+
+    if (input$map_input_temporal_scale == "annee") {
       # CAS 1 : ANNÉE
       airDatepickerInput(
-        inputId = "carte_date",
+        inputId = "map_input_date",
         label = "Quelle année :",
         range = FALSE,
         view = "years",
@@ -487,10 +479,9 @@ server <- function(input, output, session) {
         dateFormat = "yyyy",
         value = c("2025-01-01")
       )
-      
-    } else if (input$carte_tempo == "mois") {
+    } else if (input$map_input_temporal_scale == "mois") {
       airDatepickerInput(
-        inputId = "carte_date",
+        inputId = "map_input_date",
         label = "Quel mois :",
         range = FALSE,
         view = "years",
@@ -498,11 +489,10 @@ server <- function(input, output, session) {
         dateFormat = "MM/yyyy",
         value = c("2020-01-01")
       )
-      
     } else {
       # CAS 3 : JOUR
       airDatepickerInput(
-        inputId = "carte_date",
+        inputId = "map_input_date",
         label = "Quel jour :",
         range = FALSE,
         view = "months",
@@ -512,124 +502,127 @@ server <- function(input, output, session) {
       )
     }
   })
-  
-  output$carte_interactive <- renderLeaflet({
-    req(input$carte_ratio, input$carte_date, input$carte_plot)
-    
+
+  output$map_output_leaflet <- renderLeaflet({
+    req(input$map_input_scale, input$map_input_date, input$map_input_var_type)
+
     # 1. Alignement Date
-    date_cible <- as.Date(input$carte_date)
-    if (input$carte_tempo == "annee")
+    date_cible <- as.Date(input$map_input_date)
+    if (input$map_input_temporal_scale == "annee") {
       date_cible <- floor_date(date_cible, "year")
-    if (input$carte_tempo == "mois")
-      date_cible <- floor_date(date_cible, "month")
-    
-    # 2. Choix Source
-    if (input$carte_ratio == "Départementale") {
-      map_geo    <- global_data_reactive()$departements
-      data_meteo <- global_data_reactive()$meteo_departementale
-      key_col    <- "NOM_DEPT"
-    } else {
-      map_geo    <- global_data_reactive()$regions
-      data_meteo <- global_data_reactive()$meteo_regionale
-      key_col    <- "NOM_REGION"
     }
-    
+    if (input$map_input_temporal_scale == "mois") {
+      date_cible <- floor_date(date_cible, "month")
+    }
+
+    # 2. Choix Source
+    if (input$map_input_scale == "Départementale") {
+      map_geo <- global_data_reactive()$departements
+      data_meteo <- global_data_reactive()$meteo_departementale
+      key_col <- "NOM_DEPT"
+    } else {
+      map_geo <- global_data_reactive()$regions
+      data_meteo <- global_data_reactive()$meteo_regionale
+      key_col <- "NOM_REGION"
+    }
+
     # 3. Filtre Temporel
     # On filtre d'abord l'année pour réduire la taille des données
     annee_cible <- year(date_cible)
     data_subset <- data_meteo %>%
       filter(year(periode) == annee_cible)
-    
+
     # 4. Ré-agrégation & Sélection finale
     # Transforme jour -> mois/année et garde la date cible
-    data_final_meteo <- reaggregate_tempo(data_subset, input$carte_tempo) %>%
+    data_final_meteo <- reaggregate_tempo(data_subset, input$map_input_temporal_scale) %>%
       filter(periode == date_cible)
-    
+
     shiny::validate(need(
       nrow(data_final_meteo) > 0,
       paste("Pas de données pour", date_cible)
     ))
-    
+
     # 5. Jointure
     map_final <- map_geo %>% left_join(data_final_meteo, by = key_col)
-    if (!inherits(map_final, "sf"))
+    if (!inherits(map_final, "sf")) {
       map_final <- st_as_sf(map_final)
-    
+    }
+
     # 6. Plot
-    if (input$carte_plot == "Temperature")
-      req(input$carte_temp_type)
-    
+    if (input$map_input_var_type == "Temperature") {
+      req(input$map_input_temp_metric)
+    }
+
     plot_map_leaflet(
       data_map        = map_final,
-      var_type        = input$carte_plot,
+      var_type        = input$map_input_var_type,
       # "Temperature" ou "Precipitation"
-      temp_type       = input$carte_temp_type,
+      temp_type       = input$map_input_temp_metric,
       # "Temperature moy", etc.
-      col_name_region = key_col                  # "NOM_DEPT" ou "NOM_REGION"
+      col_name_region = key_col # "NOM_DEPT" ou "NOM_REGION"
     )
   })
-  
+
   # ---- Tab Demain ----
-  output$demain_loc_ui <- renderUI({
-    switch(
-      input$demain_gran,
+  output$proj_ui_location_selector <- renderUI({
+    switch(input$proj_input_scale,
       "Nationale"      = NULL,
-      "Régionale"      = selectInput("demain_region", "Région :", vec_region(), selected = "Île-de-France"),
-      "Départementale" = selectInput("demain_dept", "Département :", vec_dep())
+      "Régionale"      = selectInput("proj_input_loc_reg", "Région :", vec_region(), selected = "Île-de-France"),
+      "Départementale" = selectInput("proj_input_loc_dept", "Département :", vec_dep())
     )
   })
-  
+
   # Description Scénario
-  output$desc_scenario <- renderText({
-    switch(
-      input$scenario_giec,
+  output$proj_text_scenario_desc <- renderText({
+    switch(input$proj_input_scenario,
       "rcp26" = "🟢 Scénario Optimiste (Accord de Paris) : Fortes réductions d'émissions. La température se stabilise vers 2050.",
       "rcp45" = "🟠 Scénario Intermédiaire : Les émissions plafonnent vers 2040. Le réchauffement ralentit mais continue.",
       "rcp85" = "🔴 Scénario Pessimiste : Aucune régulation ('Business as Usual'). Hausse brutale et continue des températures."
     )
   })
-  
+
   # Graphique Projection
-  output$plot_projection <- renderPlot({
-    req(input$demain_gran, input$scenario_giec)
-    if (input$demain_gran == "Régionale")
-      req(input$demain_region)
-    if (input$demain_gran == "Départementale")
-      req(input$demain_dept)
-    
+  output$proj_plot_trajectory <- renderPlot({
+    req(input$proj_input_scale, input$proj_input_scenario)
+    if (input$proj_input_scale == "Régionale") {
+      req(input$proj_input_loc_reg)
+    }
+    if (input$proj_input_scale == "Départementale") {
+      req(input$proj_input_loc_dept)
+    }
+
     # 1. Récupération de l'Historique
-    if (input$demain_gran == "Nationale") {
+    if (input$proj_input_scale == "Nationale") {
       data_source <- global_data_reactive()$meteo_nationale
       titre <- "France Métropolitaine"
-      
-    } else if (input$demain_gran == "Régionale") {
+    } else if (input$proj_input_scale == "Régionale") {
       data_source <- global_data_reactive()$meteo_regionale %>%
-        filter(NOM_REGION == input$demain_region)
-      titre <- input$demain_region
-      
+        filter(NOM_REGION == input$proj_input_loc_reg)
+      titre <- input$proj_input_loc_reg
     } else {
       # Départementale
       data_source <- global_data_reactive()$meteo_departementale %>%
-        filter(NOM_DEPT == input$demain_dept)
-      titre <- input$demain_dept
+        filter(NOM_DEPT == input$proj_input_loc_dept)
+      titre <- input$proj_input_loc_dept
     }
-    
+
     data_hist <- reaggregate_tempo(data_source, "annee") %>%
       mutate(annee = year(periode), scenario = "Historique")
-    
+
     # 2. Récupération des Projections
     raw_proj <- global_data_reactive()$drias
     shiny::validate(need(nrow(raw_proj) > 0, "Données DRIAS introuvables."))
-    
+
     # 3. Calcul du Biais (Offset)
     # On cale la courbe DRIAS sur la réalité historique locale (période 1976-2005)
     ref_hist <- mean(data_hist$Temperature_moyenne[data_hist$annee %in% 1976:2005], na.rm = TRUE)
-    if (is.na(ref_hist))
-      ref_hist <- mean(data_hist$Temperature_moyenne, na.rm = TRUE) # Fallback
-    
+    if (is.na(ref_hist)) {
+      ref_hist <- mean(data_hist$Temperature_moyenne, na.rm = TRUE)
+    } # Fallback
+
     ref_proj <- mean(raw_proj$Temp_moy[raw_proj$annee == 2005], na.rm = TRUE)
     offset <- ref_hist - ref_proj
-    
+
     # 4. Ajustement des Projections
     data_proj_final <- raw_proj %>%
       mutate(
@@ -637,34 +630,33 @@ server <- function(input, output, session) {
         Temperature_min     = Temp_min + offset,
         Temperature_max     = Temp_max + offset
       )
-    
+
     # 5. Appel de la fonction de plot
     plot_projection_graph(
       data_hist       = data_hist,
       data_proj       = data_proj_final,
-      scenario_choisi = input$scenario_giec,
+      scenario_choisi = input$proj_input_scenario,
       titre           = titre,
       offset_val      = offset
     )
   })
-  
+
   # ---- Pré-chargement ----
   # Permet de charger tout les inputs par default dans les accordéons
   # Sans cela les plots ne s"affichent pas
-  
+
   # Onglet Situation
-  outputOptions(output, "situation_territoire_ui", suspendWhenHidden = FALSE)
-  outputOptions(output, "ui_situation_temp_type", suspendWhenHidden = FALSE)
-  outputOptions(output, "date_range_ui", suspendWhenHidden = FALSE)
-  
+  outputOptions(output, "sit_ui_location_selector", suspendWhenHidden = FALSE)
+  outputOptions(output, "sit_ui_temp_metric", suspendWhenHidden = FALSE)
+  outputOptions(output, "sit_ui_date_range", suspendWhenHidden = FALSE)
+
   # Onglet Carte
-  outputOptions(output, "ui_carte_temp_type", suspendWhenHidden = FALSE)
-  outputOptions(output, "carte_date_choix", suspendWhenHidden = FALSE)
-  
+  outputOptions(output, "map_ui_temp_metric", suspendWhenHidden = FALSE)
+  outputOptions(output, "map_ui_date_selector", suspendWhenHidden = FALSE)
+
   # Onglet Demain
-  outputOptions(output, "demain_loc_ui", suspendWhenHidden = FALSE)
-  
+  outputOptions(output, "proj_ui_location_selector", suspendWhenHidden = FALSE)
 }
-  
+
 # app ---------------------------------------------------------------------
 shinyApp(ui = ui, server = server)

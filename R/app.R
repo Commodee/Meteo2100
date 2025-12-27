@@ -58,23 +58,23 @@ ui <- page_navbar(
             "Données",
             icon = icon("database"),
             
-            prettyRadioButtons(
+            radioGroupButtons(
               inputId = "situation_plot",
               label = "Variable :",
               choices = c("Temperature", "Precipitation"),
               selected = "Temperature",
-              icon = icon("check"),
               status = "primary",
-              animation = "smooth"
+              justified = TRUE,
+              checkIcon = list(yes = icon("check"))
             ),
-            uiOutput("situation_temp_choix")
+            uiOutput("ui_situation_temp_type")
           ),
           accordion_panel(
             "Choix du Territoire",
             icon = icon("map-location-dot"),
             
             prettyRadioButtons(
-              inputId = "situation_gran",
+              inputId = "situation_territoire",
               label = "Échelle d'analyse :",
               choices = c(
                 "France entière" = "Nationale",
@@ -88,7 +88,7 @@ ui <- page_navbar(
               outline = TRUE,
               animation = "pulse"
             ),
-            uiOutput("situation_gran_ui")
+            uiOutput("situation_territoire_ui")
           ),
           
           accordion_panel(
@@ -143,7 +143,7 @@ ui <- page_navbar(
               choices = c("Temperature", "Precipitation"),
               selected = "Temperature"
             ),
-            uiOutput("carte_temp_choix")
+            uiOutput("ui_carte_temp_type")
           ),
           
           accordion_panel(
@@ -304,9 +304,9 @@ server <- function(input, output, session) {
   })
 
   # ---- Tab Situation ----
-  output$situation_gran_ui <- renderUI({
+  output$situation_territoire_ui <- renderUI({
     switch(
-      input$situation_gran,
+      input$situation_territoire,
       "Station Météo" = selectInput("situation_commune", "Choisir la commune", vec_commune()),
       "Départementale" = selectInput("situation_dep", "Choisir le département", vec_dep()),
       "Régionale" = selectInput("situation_reg", "Choisir la région", vec_region()),
@@ -314,18 +314,21 @@ server <- function(input, output, session) {
     )
   })
   
-  output$situation_temp_choix <- renderUI({
+  output$ui_situation_temp_type <- renderUI({
     if (input$situation_plot == "Temperature") {
-      radioButtons(
-        inputId = "situation_temp_choix",
+      radioGroupButtons(
+        inputId = "situation_temp_type",
         label = "Quelle temperature ?",
         choices = c(
-          "Temperature max",
-          "Temperature min",
-          "Temperature moy",
-          "Tout"
+          "Max",
+          "Min",
+          "Moy",
+          "3-en-1"
         ),
-        selected = "Temperature moy"
+        selected = "Moy",
+        status = "success",
+        justified = TRUE,
+        checkIcon = list(yes = icon("check"))
       )
     } else {
       NULL
@@ -380,7 +383,7 @@ server <- function(input, output, session) {
   
   # plot
   output$plot1 <- renderPlot({
-    req(input$situation_gran,
+    req(input$situation_territoire,
         input$plage_dates,
         input$situation_plot)
     
@@ -389,7 +392,7 @@ server <- function(input, output, session) {
     if (input$situation_tempo == "annee")
       date_fin <- as.Date(paste0(year(date_fin), "-12-31"))
     
-    if (input$situation_gran == "Station Météo") {
+    if (input$situation_territoire == "Station Météo") {
       req(input$situation_commune)
       
       
@@ -416,18 +419,18 @@ server <- function(input, output, session) {
       
     } else {
       data_source <- switch(
-        input$situation_gran,
+        input$situation_territoire,
         "Nationale" = global_data_reactive()$meteo_nationale,
         "Régionale" = global_data_reactive()$meteo_regionale,
         "Départementale" = global_data_reactive()$meteo_departementale
       )
       
       # Filtrage Géo
-      if (input$situation_gran == "Régionale") {
+      if (input$situation_territoire == "Régionale") {
         req(input$situation_reg)
         data_source <- data_source %>% filter(NOM_REGION == input$situation_reg)
         titre <- input$situation_reg
-      } else if (input$situation_gran == "Départementale") {
+      } else if (input$situation_territoire == "Départementale") {
         req(input$situation_dep)
         data_source <- data_source %>% filter(NOM_DEPT == input$situation_dep)
         titre <- input$situation_dep
@@ -445,21 +448,21 @@ server <- function(input, output, session) {
     
     # 3. Plot
     if (input$situation_plot == "Temperature") {
-      req(input$situation_temp_choix)
+      req(input$situation_temp_type)
       plot_temp(data_ready,
                 titre,
                 input$situation_tempo,
-                input$situation_temp_choix)
+                input$situation_temp_type)
     } else {
       plot_prec(data_ready, titre, input$situation_tempo)
     }
   })
   
   # ---- Tab Carte ----
-  output$carte_temp_choix <- renderUI({
+  output$ui_carte_temp_type <- renderUI({
     if (input$carte_plot == "Temperature") {
       radioButtons(
-        inputId = "Carte_temp_choix",
+        inputId = "carte_temp_type",
         label = "Quelle temperature ?",
         choices = c("Temperature max", "Temperature min", "Temperature moy"),
         selected = "Temperature moy"
@@ -554,13 +557,13 @@ server <- function(input, output, session) {
     
     # 6. Plot
     if (input$carte_plot == "Temperature")
-      req(input$Carte_temp_choix)
+      req(input$carte_temp_type)
     
     plot_map_leaflet(
       data_map        = map_final,
       var_type        = input$carte_plot,
       # "Temperature" ou "Precipitation"
-      temp_type       = input$Carte_temp_choix,
+      temp_type       = input$carte_temp_type,
       # "Temperature moy", etc.
       col_name_region = key_col                  # "NOM_DEPT" ou "NOM_REGION"
     )
@@ -650,12 +653,12 @@ server <- function(input, output, session) {
   # Sans cela les plots ne s"affichent pas
   
   # Onglet Situation
-  outputOptions(output, "situation_gran_ui", suspendWhenHidden = FALSE)
-  outputOptions(output, "situation_temp_choix", suspendWhenHidden = FALSE)
+  outputOptions(output, "situation_territoire_ui", suspendWhenHidden = FALSE)
+  outputOptions(output, "ui_situation_temp_type", suspendWhenHidden = FALSE)
   outputOptions(output, "date_range_ui", suspendWhenHidden = FALSE)
   
   # Onglet Carte
-  outputOptions(output, "carte_temp_choix", suspendWhenHidden = FALSE)
+  outputOptions(output, "ui_carte_temp_type", suspendWhenHidden = FALSE)
   outputOptions(output, "carte_date_choix", suspendWhenHidden = FALSE)
   
   # Onglet Demain

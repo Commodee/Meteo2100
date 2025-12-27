@@ -15,15 +15,15 @@ plot_temp <- function(data,
                       temp_choix) {
   colonne_y <- switch(
     temp_choix,
-    "Temperature max" = "Temperature_max",
-    "Temperature moy" = "Temperature_moyenne",
-    "Temperature min" = "Temperature_min",
-    "Tout"            = "Temperature_moyenne"
+    "Max" = "Temperature_max",
+    "Moy" = "Temperature_moyenne",
+    "Min" = "Temperature_min",
+    "3-en-1"            = "Temperature_moyenne"
   )
   
   p <- ggplot(data, aes(x = periode, y = .data[[colonne_y]]))
   
-  if (temp_choix == "Tout") {
+  if (temp_choix == "3-en-1") {
     p <- p + geom_ribbon(
       aes(ymin = Temperature_min, ymax = Temperature_max),
       fill = "#3498db",

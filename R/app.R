@@ -459,8 +459,8 @@ server <- function(input, output, session) {
       radioGroupButtons(
         inputId = "map_input_temp_metric",
         label = "Quelle temperature ?",
-        choices = c("Temperature max", "Temperature min", "Temperature moy"),
-        selected = "Temperature moy",
+        choices = c("Max", "Min", "Moy"),
+        selected = "Moy",
         status = "success",
         justified = TRUE,
         checkIcon = list(yes = icon("check"))
@@ -547,6 +547,26 @@ server <- function(input, output, session) {
       nrow(data_final_meteo) > 0,
       paste("Pas de données pour", date_cible)
     ))
+
+    # Vérification supplémentaire : si les lignes existent mais sont vides (NA)
+    col_check <- if (input$map_input_var_type == "Temperature") {
+      req(input$map_input_temp_metric)
+      switch(input$map_input_temp_metric,
+        "Max" = "Temperature_max",
+        "Min" = "Temperature_min",
+        "Moy" = "Temperature_moyenne",
+        "Temperature_moyenne"
+      )
+    } else {
+      "Precipitation_mm_moy"
+    }
+
+    if (col_check %in% names(data_final_meteo)) {
+      shiny::validate(need(
+        !all(is.na(data_final_meteo[[col_check]])),
+        paste("Pas de données pour", date_cible)
+      ))
+    }
 
     # 5. Jointure
     map_final <- map_geo %>% left_join(data_final_meteo, by = key_col)

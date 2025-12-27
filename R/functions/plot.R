@@ -13,16 +13,15 @@ plot_temp <- function(data,
                       titre_geo = "France",
                       granularite_temps,
                       temp_choix) {
-  colonne_y <- switch(
-    temp_choix,
+  colonne_y <- switch(temp_choix,
     "Max" = "Temperature_max",
     "Moy" = "Temperature_moyenne",
     "Min" = "Temperature_min",
-    "3-en-1"            = "Temperature_moyenne"
+    "3-en-1" = "Temperature_moyenne"
   )
-  
+
   p <- ggplot(data, aes(x = periode, y = .data[[colonne_y]]))
-  
+
   if (temp_choix == "3-en-1") {
     p <- p + geom_ribbon(
       aes(ymin = Temperature_min, ymax = Temperature_max),
@@ -33,14 +32,16 @@ plot_temp <- function(data,
     # Lissage seulement si on est en vue annuelle
     p <- p + geom_smooth(
       color = "#e74c3c",
-      fill  = "#f58f3c",
+      fill = "#f58f3c",
       alpha = 0.1,
       linewidth = 1,
       linetype = "dotted",
-      se = TRUE
+      se = TRUE,
+      method = "loess",
+      formula = "y ~ x"
     )
   }
-  
+
   p + geom_line(color = "#2980b9", linewidth = 1.2) +
     theme_minimal(base_size = 14) +
     labs(
@@ -108,50 +109,64 @@ plot_map_leaflet <- function(data_map,
   # 1. Configuration selon la variable (Température ou Pluie)
   if (var_type == "Temperature") {
     # Choix de la colonne spécifique
-    col_val <- switch(
-      temp_type,
-      "Temperature max" = "Temperature_max",
-      "Temperature min" = "Temperature_min",
-      "Temperature moy" = "Temperature_moyenne",
+    col_val <- switch(temp_type,
+      "Max" = "Temperature_max",
+      "Min" = "Temperature_min",
+      "Moy" = "Temperature_moyenne",
       "Temperature_moyenne"
     ) # Valeur par défaut
-    
+
     palette_name <- "RdYlBu"
-    is_reverse   <- TRUE   # Rouge = Chaud, Bleu = Froid
-    unit_label   <- "°C"
+    is_reverse <- TRUE # Rouge = Chaud, Bleu = Froid
+    unit_label <- "°C"
     title_legend <- paste0(temp_type, " (°C)")
-    
   } else {
     # Cas Précipitations
-    col_val      <- "Precipitation_mm_moy"
+    col_val <- "Precipitation_mm_moy"
     palette_name <- "Blues"
-    is_reverse   <- FALSE  # Bleu clair = sec, Bleu foncé = humide
-    unit_label   <- "mm"
+    is_reverse <- FALSE # Bleu clair = sec, Bleu foncé = humide
+    unit_label <- "mm"
     title_legend <- "Précipitations (mm)"
   }
-  
+
   # 2. Création de la palette de couleurs
   # On extrait les valeurs pour définir le domaine (min/max)
   vals <- data_map[[col_val]]
-  
+
+  # Sécurité : si toutes les valeurs sont NA (ex: pas de correspondance géo ou données manquantes)
+  if (is.null(vals) || all(is.na(vals))) {
+    return(
+      leaflet(data_map) %>%
+        addProviderTiles(providers$CartoDB.Positron) %>%
+        addPolygons(
+          color       = "#2c3e50",
+          weight      = 1,
+          opacity     = 1,
+          fillColor   = "#808080",
+          fillOpacity = 0.6,
+          label       = ~ paste(get(col_name_region), ": Pas de données")
+        )
+    )
+  }
+
   pal <- colorNumeric(
     palette  = palette_name,
     domain   = vals,
     reverse  = is_reverse,
     na.color = "#808080"
   )
-  
+
   # 3. Construction de la carte
   leaflet(data_map) %>%
     addProviderTiles(providers$CartoDB.Positron) %>%
     addPolygons(
-      fillColor   = ~ pal(get(col_val)),
-      color       = "#2c3e50",
-      weight      = 1,
-      opacity     = 1,
+      fillColor = ~ pal(get(col_val)),
+      color = "#2c3e50",
+      weight = 1,
+      opacity = 1,
       fillOpacity = 0.6,
       # Tooltip dynamique : Nom + Valeur + Unité
-      label       = ~ paste0(get(col_name_region), ": ", round(get(col_val), 1), " ", unit_label),
+      label = ~ paste0(get(col_name_region), ": ", round(get(col_val), 1), " ", unit_label),
       highlightOptions = highlightOptions(
         weight = 3,
         color = "#e74c3c",
@@ -188,8 +203,8 @@ plot_projection_graph <- function(data_hist,
                                   offset_val) {
   # Séparation : le scénario choisi vs les autres (pour le fond)
   data_proj_selected <- data_proj %>% filter(Contexte == scenario_choisi)
-  data_proj_back     <- data_proj
-  
+  data_proj_back <- data_proj
+
   ggplot() +
     # 1. Tous les scénarios en arrière-plan (pointillés gris)
     geom_line(
@@ -199,21 +214,21 @@ plot_projection_graph <- function(data_hist,
       linetype = "dashed",
       alpha = 0.5
     ) +
-    
+
     # 2. L'historique (Trait plein sombre)
     geom_line(
       data = data_hist,
       aes(x = annee, y = Temperature_moyenne, color = "Historique"),
       linewidth = 1
     ) +
-    
+
     # 3. Le Scénario choisi (Trait coloré épais)
     geom_line(
       data = data_proj_selected,
       aes(x = annee, y = Temperature_moyenne, color = Contexte),
       linewidth = 1.5
     ) +
-    
+
     # 4. Esthétique et Couleurs
     scale_color_manual(
       values = c(
@@ -223,11 +238,8 @@ plot_projection_graph <- function(data_hist,
         "rcp85"      = "#e74c3c"
       )
     ) +
-    
     geom_vline(xintercept = 2025, linetype = "dotted") +
-    
     theme_minimal(base_size = 14) +
-    
     labs(
       title    = paste("Trajectoire :", titre),
       subtitle = paste("Ajustement (biais) appliqué :", round(offset_val, 1), "°C"),
@@ -237,7 +249,7 @@ plot_projection_graph <- function(data_hist,
       caption  = "Source: Météo-France & DRIAS"
     ) +
     theme(
-      plot.title    = element_text(face = "bold", color = "#2c3e50"),
+      plot.title = element_text(face = "bold", color = "#2c3e50"),
       plot.subtitle = element_text(size = 10, color = "#7f8c8d"),
       legend.position = "bottom"
     )

@@ -130,11 +130,14 @@ ui <- page_navbar(
           accordion_panel(
             "Données",
             icon = icon("database"),
-            radioButtons(
+            radioGroupButtons(
               inputId = "map_input_var_type",
               label = "On affiche quoi ?",
               choices = c("Temperature", "Precipitation"),
-              selected = "Temperature"
+              selected = "Temperature",
+              status = "primary",
+              justified = TRUE,
+              checkIcon = list(yes = icon("check"))
             ),
             uiOutput("map_ui_temp_metric")
           ),
@@ -453,11 +456,14 @@ server <- function(input, output, session) {
   # ---- Tab Carte ----
   output$map_ui_temp_metric <- renderUI({
     if (input$map_input_var_type == "Temperature") {
-      radioButtons(
+      radioGroupButtons(
         inputId = "map_input_temp_metric",
         label = "Quelle temperature ?",
         choices = c("Temperature max", "Temperature min", "Temperature moy"),
-        selected = "Temperature moy"
+        selected = "Temperature moy",
+        status = "success",
+        justified = TRUE,
+        checkIcon = list(yes = icon("check"))
       )
     } else {
       NULL

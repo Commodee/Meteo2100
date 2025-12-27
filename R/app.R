@@ -727,18 +727,15 @@ server <- function(input, output, session) {
 
   observeEvent(input$btn_confirm_update, {
     removeModal()
-
-    # On réutilise le loader principal pour bloquer l'écran pendant tout le processus
-    # Il sera caché automatiquement par l'observe() plus haut qui surveille global_data_reactive()
     w_update$show()
 
     tryCatch(
       {
-        # 1. Suppression des fichiers Parquet récents (2024-2025)
+        # 1. Suppression des fichiers Parquet récents (2024-202x)
         parquet_dir <- "../data/meteo_parquet"
         if (dir.exists(parquet_dir)) {
           files <- list.files(parquet_dir, full.names = TRUE)
-          # On cherche les fichiers qui contiennent 2024 ou 2025 dans leur nom
+          # On cherche les fichiers qui contiennent 2024 dans leur nom
           files_to_delete <- files[grepl("2024", files)]
           if (length(files_to_delete) > 0) {
             unlink(files_to_delete, force = TRUE)

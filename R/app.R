@@ -5,9 +5,11 @@ library(httr)
 library(leaflet)
 library(sf)
 library(shiny)
+library(shinycssloaders)
 library(shinyWidgets)
 library(tidyverse)
 library(waiter)
+
 
 
 # load externals scripts ----------------------------------------------------
@@ -17,33 +19,6 @@ source("functions/aggregate_meteo.R")
 source("functions/plot.R")
 source("functions/projections_loader.R")
 
-
-
-# load data ----------------------------------------------------------------
-global_data <- load_raw_data()
-
-
-# process data ------------------------------------------------------------
-vec_dep <- global_data$meteo %>%
-  select(NOM_DEPT, CODE_DEPT) %>%
-  distinct(NOM_DEPT, CODE_DEPT) %>%
-  collect() %>%
-  arrange(CODE_DEPT) %>%
-  pull(NOM_DEPT)
-
-vec_region <- global_data$meteo %>%
-  arrange(NOM_REGION) %>%
-  select(NOM_REGION) %>%
-  distinct(NOM_REGION) %>%
-  collect() %>%
-  pull(NOM_REGION)
-
-vec_commune <- global_data$meteo %>%
-  arrange(NOM_USUEL) %>%
-  select(NOM_USUEL) %>%
-  distinct(NOM_USUEL) %>%
-  collect() %>%
-  pull(NOM_USUEL)
 
 # ui ----------------------------------------------------------------------
 ui <- page_navbar(
@@ -62,11 +37,9 @@ ui <- page_navbar(
     # heading_font = font_google("Montserrat")
   ),
   fillable = TRUE,
-  
+
   header = tagList(
-    autoWaiter(id = "plot1", html = spin_flower(), color = "rgba(52, 152, 219,0.8)"),
-    autoWaiter(id = "carte_interactive", html = spin_flower(), color = "rgba(52, 152, 219,0.8)"),
-    autoWaiter(id = "plot_projection", html = spin_flower(), color = "rgba(52, 152, 219,0.8)")
+    useWaiter()
   ),
   
   # tab_situation ----
@@ -143,7 +116,7 @@ ui <- page_navbar(
         full_screen = TRUE,
         card_header("Visualisation des données historiques"),
         textOutput("text"),
-        plotOutput("plot1", height = "500px")
+        plotOutput("plot1", height = "500px") %>% withSpinner(color = "#3498db", type = 6)
       ) # card
     ) # layout_sidebar
   ),
@@ -206,7 +179,7 @@ ui <- page_navbar(
       card(
         full_screen = TRUE,
         card_header("Exploration Cartographique"),
-        card_body(padding = 0, leafletOutput("carte_interactive", height = "500px"))
+        card_body(padding = 0, leafletOutput("carte_interactive", height = "500px") %>% withSpinner(color = "#3498db", type = 6))
       ) # card
     ) # layout_sidebar
   ),
@@ -257,7 +230,7 @@ ui <- page_navbar(
     
       card(
         card_header("Trajectoire de température"),
-        plotOutput("plot_projection", height = "500px"),
+        plotOutput("plot_projection", height = "500px") %>% withSpinner(color = "#3498db", type = 6),
         wellPanel(h4("Détails du scénario"), textOutput("desc_scenario"))
       ) # card
     ) # layout_sidebar
@@ -272,13 +245,71 @@ ui <- page_navbar(
   
 # server ------------------------------------------------------------------
 server <- function(input, output, session) {
+  # Création de l'écran de chargement
+  w <- Waiter$new(
+    html = tagList(
+      spin_flower(),
+      h3("Chargement des données climatiques..."),
+      p("Cela peut prendre 30 secondes au premier lancement")
+    ),
+    color = "rgba(52, 152, 219, 0.9)"
+  )
+  # On l'affiche
+  w$show()
+  
+  # Chargement des données
+  global_data_reactive <- eventReactive(TRUE, {
+    result <- load_raw_data()
+    result
+  }, ignoreNULL = FALSE)
+
+  # Préparation des vecteurs de choix
+  vec_dep <- reactive({
+    global_data_reactive()$meteo %>%
+      select(NOM_DEPT, CODE_DEPT) %>%
+      distinct(NOM_DEPT, CODE_DEPT) %>%
+      collect() %>%
+      arrange(CODE_DEPT) %>%
+      pull(NOM_DEPT)
+  })
+
+  vec_region <- reactive({
+    global_data_reactive()$meteo %>%
+      arrange(NOM_REGION) %>%
+      select(NOM_REGION) %>%
+      distinct(NOM_REGION) %>%
+      collect() %>%
+      pull(NOM_REGION)
+  })
+
+  vec_commune <- reactive({
+    global_data_reactive()$meteo %>%
+      arrange(NOM_USUEL) %>%
+      select(NOM_USUEL) %>%
+      distinct(NOM_USUEL) %>%
+      collect() %>%
+      pull(NOM_USUEL)
+  })
+  
+  # Logique de l'écran de chargement
+  observe({
+    req(global_data_reactive())
+    # On force le calcul des vecteurs pour que l'interface soit fluide
+    # et on attend qu'ils soient prêts pour cacher le loader
+    vec_dep()
+    vec_region()
+    vec_commune()
+    # on cache le loader quand tout est chargé
+    w$hide()
+  })
+
   # ---- Tab Situation ----
   output$situation_gran_ui <- renderUI({
     switch(
       input$situation_gran,
-      "Station Météo" = selectInput("situation_commune", "Choisir la commune", vec_commune),
-      "Départementale" = selectInput("situation_dep", "Choisir le département", vec_dep),
-      "Régionale" = selectInput("situation_reg", "Choisir la région", vec_region),
+      "Station Météo" = selectInput("situation_commune", "Choisir la commune", vec_commune()),
+      "Départementale" = selectInput("situation_dep", "Choisir le département", vec_dep()),
+      "Régionale" = selectInput("situation_reg", "Choisir la région", vec_region()),
       "Nationale" = NULL
     )
   })
@@ -362,7 +393,7 @@ server <- function(input, output, session) {
       req(input$situation_commune)
       
       
-      data_filtered <- global_data$meteo %>%
+      data_filtered <- global_data_reactive()$meteo %>%
         filter(NOM_USUEL == input$situation_commune) %>%
         filter(DATE >= date_deb, DATE <= date_fin) %>%
         select(DATE, TM, TN, TX, RR) %>%
@@ -386,9 +417,9 @@ server <- function(input, output, session) {
     } else {
       data_source <- switch(
         input$situation_gran,
-        "Nationale" = global_data$meteo_nationale,
-        "Régionale" = global_data$meteo_regionale,
-        "Départementale" = global_data$meteo_departementale
+        "Nationale" = global_data_reactive()$meteo_nationale,
+        "Régionale" = global_data_reactive()$meteo_regionale,
+        "Départementale" = global_data_reactive()$meteo_departementale
       )
       
       # Filtrage Géo
@@ -491,12 +522,12 @@ server <- function(input, output, session) {
     
     # 2. Choix Source
     if (input$carte_ratio == "Départementale") {
-      map_geo    <- global_data$departements
-      data_meteo <- global_data$meteo_departementale
+      map_geo    <- global_data_reactive()$departements
+      data_meteo <- global_data_reactive()$meteo_departementale
       key_col    <- "NOM_DEPT"
     } else {
-      map_geo    <- global_data$regions
-      data_meteo <- global_data$meteo_regionale
+      map_geo    <- global_data_reactive()$regions
+      data_meteo <- global_data_reactive()$meteo_regionale
       key_col    <- "NOM_REGION"
     }
     
@@ -540,8 +571,8 @@ server <- function(input, output, session) {
     switch(
       input$demain_gran,
       "Nationale"      = NULL,
-      "Régionale"      = selectInput("demain_region", "Région :", vec_region, selected = "Île-de-France"),
-      "Départementale" = selectInput("demain_dept", "Département :", vec_dep)
+      "Régionale"      = selectInput("demain_region", "Région :", vec_region(), selected = "Île-de-France"),
+      "Départementale" = selectInput("demain_dept", "Département :", vec_dep())
     )
   })
   
@@ -565,17 +596,17 @@ server <- function(input, output, session) {
     
     # 1. Récupération de l'Historique
     if (input$demain_gran == "Nationale") {
-      data_source <- global_data$meteo_nationale
+      data_source <- global_data_reactive()$meteo_nationale
       titre <- "France Métropolitaine"
       
     } else if (input$demain_gran == "Régionale") {
-      data_source <- global_data$meteo_regionale %>%
+      data_source <- global_data_reactive()$meteo_regionale %>%
         filter(NOM_REGION == input$demain_region)
       titre <- input$demain_region
       
     } else {
       # Départementale
-      data_source <- global_data$meteo_departementale %>%
+      data_source <- global_data_reactive()$meteo_departementale %>%
         filter(NOM_DEPT == input$demain_dept)
       titre <- input$demain_dept
     }
@@ -584,7 +615,7 @@ server <- function(input, output, session) {
       mutate(annee = year(periode), scenario = "Historique")
     
     # 2. Récupération des Projections
-    raw_proj <- global_data$drias
+    raw_proj <- global_data_reactive()$drias
     shiny::validate(need(nrow(raw_proj) > 0, "Données DRIAS introuvables."))
     
     # 3. Calcul du Biais (Offset)
@@ -614,6 +645,7 @@ server <- function(input, output, session) {
     )
   })
   
+  # ---- Pré-chargement ----
   # Permet de charger tout les inputs par default dans les accordéons
   # Sans cela les plots ne s"affichent pas
   

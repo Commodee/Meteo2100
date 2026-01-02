@@ -13,22 +13,54 @@ plot_temp <- function(data,
                       titre_geo = "France",
                       granularite_temps,
                       temp_choix) {
+  
+  # Cas Spécial 3-en-1 : Affichage complet avec légende explicite
+  if (temp_choix == "3-en-1") {
+    return(
+      ggplot(data, aes(x = periode)) +
+        # Ruban d'amplitude
+        geom_ribbon(aes(ymin = Temperature_min, ymax = Temperature_max, fill = "Amplitude"), alpha = 0.15) +
+        # Lignes Min/Max
+        geom_line(aes(y = Temperature_min, color = "Min"), linewidth = 0.5, linetype = "dashed") +
+        geom_line(aes(y = Temperature_max, color = "Max"), linewidth = 0.5, linetype = "dashed") +
+        # Ligne Moyenne
+        geom_line(aes(y = Temperature_moyenne, color = "Moyenne"), linewidth = 1) +
+        
+        # Couleurs et Légendes
+        scale_color_manual(values = c("Min" = "#3498db", "Moyenne" = "#2c3e50", "Max" = "#e74c3c")) +
+        scale_fill_manual(values = c("Amplitude" = "#3498db")) +
+        
+        theme_minimal(base_size = 14) +
+        labs(
+          title = paste("🌡️ Évolution Complète :", titre_geo),
+          subtitle = paste("Vue :", granularite_temps),
+          y = "Température (°C)",
+          x = NULL,
+          color = "Indicateur",
+          fill = "",
+          caption = "Source: Météo-France"
+        ) +
+        theme(
+          plot.title = element_text(face = "bold", color = "#2c3e50"),
+          plot.subtitle = element_text(size = 10, color = "#7f8c8d"),
+          axis.text = element_text(color = "#2c3e50"),
+          panel.grid.minor = element_blank(),
+          panel.grid.major.x = element_line(linetype = "dotted", color = "gray80"),
+          legend.position = "bottom"
+        )
+    )
+  }
+
+  # Cas Standard (Une seule courbe)
   colonne_y <- switch(temp_choix,
     "Max" = "Temperature_max",
     "Moy" = "Temperature_moyenne",
-    "Min" = "Temperature_min",
-    "3-en-1" = "Temperature_moyenne"
+    "Min" = "Temperature_min"
   )
 
   p <- ggplot(data, aes(x = periode, y = .data[[colonne_y]]))
 
-  if (temp_choix == "3-en-1") {
-    p <- p + geom_ribbon(
-      aes(ymin = Temperature_min, ymax = Temperature_max),
-      fill = "#3498db",
-      alpha = 0.2
-    )
-  } else if (granularite_temps == "annee") {
+  if (granularite_temps == "annee") {
     # Lissage seulement si on est en vue annuelle
     p <- p + geom_smooth(
       color = "#e74c3c",

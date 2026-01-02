@@ -265,9 +265,9 @@ process_department <- function(dept, all_resources, mode, annee, output_dir, ref
 
   # 3. Filtrage "Mode Light"
   if (mode == "light") {
-    dept_res <- dept_res %>% filter(start_year >= 2024)
+    dept_res <- dept_res %>% filter(start_year >= 2025)
     if (nrow(dept_res) == 0) {
-      log_msg("   [Info] Mode Light : Aucun fichier récent (2024+) trouvé.", verbose = verbose)
+      log_msg("   [Info] Mode Light : Aucun fichier récent (2025+) trouvé.", verbose = verbose)
       return(NULL)
     }
   }

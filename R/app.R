@@ -1005,12 +1005,12 @@ server <- function(input, output, session) {
 
     tryCatch(
       {
-        # 1. Suppression des fichiers Parquet récents (2024-202x)
+        # 1. Suppression des fichiers Parquet récents (2025-2026)
         parquet_dir <- "../data/meteo_parquet"
         if (dir.exists(parquet_dir)) {
           files <- list.files(parquet_dir, full.names = TRUE)
-          # On cherche les fichiers qui contiennent 2024 dans leur nom
-          files_to_delete <- files[grepl("2024", files)]
+          # On cherche les fichiers qui contiennent 2025 dans leur nom
+          files_to_delete <- files[grepl("2025", files)]
           if (length(files_to_delete) > 0) {
             unlink(files_to_delete, force = TRUE)
           }
@@ -1022,7 +1022,7 @@ server <- function(input, output, session) {
         if (!is.null(ref_geo)) {
           download_meteo_multi_parquet(
             departements = ref_geo$CODE_DEPT,
-            mode = "full",
+            mode = "light",
             output_dir = parquet_dir,
             parallel = TRUE,
             n_cores = parallel::detectCores(logical = FALSE) - 1,

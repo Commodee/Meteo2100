@@ -228,9 +228,9 @@ ui <- page_navbar(
           card_body(padding = 0, leafletOutput("map_output_leaflet", height = "500px") %>% withSpinner(color = "#3498db", type = 6))
         ),
         tagList(
-          card(card_header("Info 1"), "Contenu vide", style = "height: 150px;"),
-          card(card_header("Info 2"), "Contenu vide", style = "height: 150px;"),
-          card(card_header("Info 3"), "Contenu vide", style = "height: 150px;")
+          uiOutput("map_info_max", style = "height: 180px; margin-bottom: 15px;"),
+          uiOutput("map_info_min", style = "height: 180px; margin-bottom: 15px;"),
+          uiOutput("map_info_mean", style = "height: 180px; margin-bottom: 15px;")
         )
       ) # layout_columns
     ) # layout_sidebar
@@ -558,7 +558,13 @@ server <- function(input, output, session) {
         checkIcon = list(yes = icon("check"))
       )
     } else {
-      NULL
+      div(
+        class = "alert alert-info",
+        style = "margin-top: 10px; font-size: 0.9em;",
+        icon("info-circle"),
+        tags$b("Note méthodologique :"), br(),
+        "La valeur affichée correspond à la moyenne des précipitations sur le territoire, cumulée sur la période sélectionnée."
+      )
     }
   })
 
@@ -601,7 +607,8 @@ server <- function(input, output, session) {
     }
   })
 
-  output$map_output_leaflet <- renderLeaflet({
+  # Reactive pour les données de la carte
+  map_data_reactive <- reactive({
     req(input$map_input_scale, input$map_input_date, input$map_input_var_type)
 
     # 1. Alignement Date
@@ -647,6 +654,14 @@ server <- function(input, output, session) {
     data_final_meteo <- reaggregate_tempo(data_subset, input$map_input_temporal_scale) %>%
       filter(periode == date_cible)
 
+    # Filtre DOM-TOM pour la carte et les indicateurs
+    doms <- c("Guadeloupe", "Martinique", "Guyane", "La Réunion", "Mayotte")
+    if (key_col == "NOM_DEPT") {
+      data_final_meteo <- data_final_meteo %>% filter(!NOM_DEPT %in% doms)
+    } else {
+      data_final_meteo <- data_final_meteo %>% filter(!NOM_REGION %in% doms)
+    }
+
     shiny::validate(need(
       nrow(data_final_meteo) > 0,
       paste("Pas de données pour", date_cible)
@@ -672,8 +687,20 @@ server <- function(input, output, session) {
       ))
     }
 
+    list(
+      data = data_final_meteo,
+      geo = map_geo,
+      key = key_col,
+      col_var = col_check,
+      date = date_cible
+    )
+  })
+
+  output$map_output_leaflet <- renderLeaflet({
+    res <- map_data_reactive()
+
     # 5. Jointure
-    map_final <- map_geo %>% left_join(data_final_meteo, by = key_col)
+    map_final <- res$geo %>% left_join(res$data, by = res$key)
     if (!inherits(map_final, "sf")) {
       map_final <- st_as_sf(map_final)
     }
@@ -689,7 +716,97 @@ server <- function(input, output, session) {
       # "Temperature" ou "Precipitation"
       temp_type       = input$map_input_temp_metric,
       # "Temperature moy", etc.
-      col_name_region = key_col # "NOM_DEPT" ou "NOM_REGION"
+      col_name_region = res$key # "NOM_DEPT" ou "NOM_REGION"
+    )
+  })
+
+  # Indicateur Max
+  output$map_info_max <- renderUI({
+    res <- map_data_reactive()
+    data <- res$data
+    col <- res$col_var
+
+    # Trouver le max
+    row_max <- data %>%
+      filter(!!sym(col) == max(!!sym(col), na.rm = TRUE)) %>%
+      slice(1)
+    val_max <- row_max[[col]]
+    nom_max <- row_max[[res$key]]
+
+    is_temp <- input$map_input_var_type == "Temperature"
+    unit <- if (is_temp) "°C" else "mm"
+
+    # Style
+    bg_color <- if (is_temp) {
+      "linear-gradient(135deg, #e74c3c 0%, #c0392b 100%)" # Rouge
+    } else {
+      "linear-gradient(135deg, #3498db 0%, #2980b9 100%)" # Bleu
+    }
+
+    title_card <- if (is_temp) "Le plus chaud" else "Le plus pluvieux"
+
+    div(
+      class = "info-card",
+      style = paste0("background: ", bg_color, ";"),
+      div(class = "info-card-title", title_card),
+      div(class = "info-card-value", paste0(round(val_max, 1), " ", unit)),
+      div(class = "info-card-desc", nom_max)
+    )
+  })
+
+  # Indicateur Min
+  output$map_info_min <- renderUI({
+    res <- map_data_reactive()
+    data <- res$data
+    col <- res$col_var
+
+    # Trouver le min
+    row_min <- data %>%
+      filter(!!sym(col) == min(!!sym(col), na.rm = TRUE)) %>%
+      slice(1)
+    val_min <- row_min[[col]]
+    nom_min <- row_min[[res$key]]
+
+    is_temp <- input$map_input_var_type == "Temperature"
+    unit <- if (is_temp) "°C" else "mm"
+
+    # Style
+    bg_color <- if (is_temp) {
+      "linear-gradient(135deg, #3498db 0%, #2980b9 100%)" # Bleu
+    } else {
+      "linear-gradient(135deg, #f39c12 0%, #d35400 100%)" # Orange/Sec
+    }
+
+    title_card <- if (is_temp) "Le plus froid" else "Le plus sec"
+
+    div(
+      class = "info-card",
+      style = paste0("background: ", bg_color, ";"),
+      div(class = "info-card-title", title_card),
+      div(class = "info-card-value", paste0(round(val_min, 1), " ", unit)),
+      div(class = "info-card-desc", nom_min)
+    )
+  })
+
+  # Indicateur Moyenne Nationale
+  output$map_info_mean <- renderUI({
+    res <- map_data_reactive()
+
+    # On calcule la moyenne (France Métropolitaine)
+    col <- res$col_var
+    val_moy <- mean(res$data[[col]], na.rm = TRUE)
+
+    is_temp <- input$map_input_var_type == "Temperature"
+    unit <- if (is_temp) "°C" else "mm"
+
+    bg_color <- "linear-gradient(135deg, #2ecc71 0%, #1abc9c 100%)" # Vert
+
+    div(
+      class = "info-card",
+      style = paste0("background: ", bg_color, ";"),
+      div(class = "info-card-title", "Moyenne Nationale"),
+      div(class = "info-card-value", paste0(round(val_moy, 1), " ", unit)),
+      div(class = "info-card-desc", "France Métropolitaine")
     )
   })
 

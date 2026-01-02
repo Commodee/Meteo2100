@@ -40,7 +40,46 @@ ui <- page_navbar(
   ),
   fillable = TRUE,
   header = tagList(
-    useWaiter()
+    useWaiter(),
+    tags$head(
+      tags$style(HTML("
+        .info-card {
+          color: white;
+          text-align: center;
+          border-radius: 15px;
+          padding: 20px;
+          height: 100%;
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
+          align-items: center;
+          box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+          transition: transform 0.2s;
+        }
+        .info-card:hover {
+          transform: translateY(-5px);
+        }
+        .info-card-title {
+          font-size: 1.1em;
+          font-weight: 500;
+          opacity: 0.9;
+          margin-bottom: 10px;
+        }
+        .info-card-value {
+          font-size: 2.5em;
+          font-weight: bold;
+          margin: 10px 0;
+        }
+        .info-card-desc {
+          font-size: 0.9em;
+          opacity: 0.8;
+        }
+        .info-tooltip {
+          cursor: help;
+          text-decoration: underline dotted;
+        }
+      "))
+    )
   ),
 
   # tab_situation ----
@@ -241,13 +280,12 @@ ui <- page_navbar(
         col_widths = c(9, 3),
         card(
           card_header("Trajectoire de température"),
-          plotOutput("proj_plot_trajectory", height = "500px") %>% withSpinner(color = "#3498db", type = 6),
-          wellPanel(h4("Détails du scénario"), textOutput("proj_text_scenario_desc"))
+          plotOutput("proj_plot_trajectory", height = "500px") %>% withSpinner(color = "#3498db", type = 6)
         ),
         tagList(
-          card(card_header("Info 1"), "Contenu vide", style = "height: 150px;"),
-          card(card_header("Info 2"), "Contenu vide", style = "height: 150px;"),
-          card(card_header("Info 3"), "Contenu vide", style = "height: 150px;")
+          uiOutput("proj_card_scenario", style = "height: 180px; margin-bottom: 15px;"),
+          uiOutput("proj_info_bias", style = "height: 180px; margin-bottom: 15px;"),
+          uiOutput("proj_info_delta", style = "height: 180px; margin-bottom: 15px;")
         )
       ) # layout_columns
     ) # layout_sidebar
@@ -654,17 +692,8 @@ server <- function(input, output, session) {
     )
   })
 
-  # Description Scénario
-  output$proj_text_scenario_desc <- renderText({
-    switch(input$proj_input_scenario,
-      "rcp26" = "🟢 Scénario Optimiste (Accord de Paris) : Fortes réductions d'émissions. La température se stabilise vers 2050.",
-      "rcp45" = "🟠 Scénario Intermédiaire : Les émissions plafonnent vers 2040. Le réchauffement ralentit mais continue.",
-      "rcp85" = "🔴 Scénario Pessimiste : Aucune régulation ('Business as Usual'). Hausse brutale et continue des températures."
-    )
-  })
-
-  # Graphique Projection
-  output$proj_plot_trajectory <- renderPlot({
+  # Reactive pour les données de projection
+  proj_data_reactive <- reactive({
     req(input$proj_input_scale, input$proj_input_scenario)
     if (input$proj_input_scale == "Régionale") {
       req(input$proj_input_loc_reg)
@@ -705,7 +734,13 @@ server <- function(input, output, session) {
     ref_proj <- mean(raw_proj$Temp_moy[raw_proj$annee == 2005], na.rm = TRUE)
     offset <- ref_hist - ref_proj
 
-    # 4. Ajustement des Projections
+    # 4. Calcul de la Normale 1991-2020 (pour le Delta)
+    ref_normale <- mean(data_hist$Temperature_moyenne[data_hist$annee %in% 1991:2020], na.rm = TRUE)
+    if (is.na(ref_normale)) {
+      ref_normale <- ref_hist # Fallback
+    }
+
+    # 5. Ajustement des Projections
     data_proj_final <- raw_proj %>%
       mutate(
         Temperature_moyenne = Temp_moy + offset,
@@ -713,13 +748,121 @@ server <- function(input, output, session) {
         Temperature_max     = Temp_max + offset
       )
 
-    # 5. Appel de la fonction de plot
+    list(
+      data_hist = data_hist,
+      data_proj = data_proj_final,
+      offset = offset,
+      titre = titre,
+      ref_hist = ref_hist,
+      ref_normale = ref_normale
+    )
+  })
+
+  # Info 1 : Scénario
+  output$proj_card_scenario <- renderUI({
+    info <- switch(input$proj_input_scenario,
+      "rcp26" = list(
+        titre = "Scénario Optimiste",
+        valeur = "RCP 2.6",
+        desc = "Fortes réductions d'émissions (Accord de Paris). La température se stabilise vers 2050.",
+        bg = "linear-gradient(135deg, #2ecc71 0%, #1abc9c 100%)"
+      ),
+      "rcp45" = list(
+        titre = "Scénario Intermédiaire",
+        valeur = "RCP 4.5",
+        desc = "Les émissions plafonnent vers 2040. Le réchauffement ralentit mais continue.",
+        bg = "linear-gradient(135deg, #f39c12 0%, #d35400 100%)"
+      ),
+      "rcp85" = list(
+        titre = "Scénario Pessimiste",
+        valeur = "RCP 8.5",
+        desc = "Aucune régulation ('Business as Usual'). Hausse brutale et continue des températures.",
+        bg = "linear-gradient(135deg, #e74c3c 0%, #c0392b 100%)"
+      )
+    )
+
+    div(
+      class = "info-card",
+      style = paste0("background: ", info$bg, ";"),
+      div(class = "info-card-title", info$titre),
+      div(class = "info-card-value", info$valeur),
+      div(
+        class = "info-card-desc",
+        info$desc
+      )
+    )
+  })
+
+  # Info 2 : Biais
+  output$proj_info_bias <- renderUI({
+    data <- proj_data_reactive()
+
+    div(
+      class = "info-card",
+      style = "background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);",
+      div(class = "info-card-title", "Correction de Biais"),
+      div(class = "info-card-value", paste0(round(data$offset, 1), " °C")),
+      div(
+        class = "info-card-desc",
+        tooltip(
+          trigger = span("Explication", class = "info-tooltip", icon("info-circle")),
+          "Les projections DRIAS sont basées sur la période 1976-2005. On applique un biais local en comparant notre historique (1976-2005) à la projection DRIAS de 2005.",
+          placement = "top"
+        )
+      )
+    )
+  })
+
+  # Info 3 : Delta
+  output$proj_info_delta <- renderUI({
+    data <- proj_data_reactive()
+
+    # Dernière année disponible dans les projections
+    last_year <- max(data$data_proj$annee, na.rm = TRUE)
+
+    # Valeur future pour le scénario choisi
+    future_val <- data$data_proj %>%
+      filter(annee == last_year, Contexte == input$proj_input_scenario) %>%
+      pull(Temperature_moyenne) %>%
+      mean(na.rm = TRUE)
+
+    delta <- future_val - data$ref_normale
+
+    # Couleur dynamique selon le delta
+    bg_color <- if (delta > 4) {
+      "linear-gradient(135deg, #e74c3c 0%, #c0392b 100%)" # Rouge foncé
+    } else if (delta > 2) {
+      "linear-gradient(135deg, #f39c12 0%, #d35400 100%)" # Orange
+    } else {
+      "linear-gradient(135deg, #2ecc71 0%, #1abc9c 100%)" # Vert
+    }
+
+    div(
+      class = "info-card",
+      style = paste0("background: ", bg_color, ";"),
+      div(class = "info-card-title", "Écart vs Normale"),
+      div(class = "info-card-value", paste0("+", round(delta, 1), " °C")),
+      div(
+        class = "info-card-desc",
+        tooltip(
+          trigger = span(paste0("Horizon ", last_year), class = "info-tooltip", icon("info-circle")),
+          paste0("Écart prévu en ", last_year, " par rapport à la normale 1991-2020."),
+          placement = "top"
+        )
+      )
+    )
+  })
+
+  # Graphique Projection
+  output$proj_plot_trajectory <- renderPlot({
+    data <- proj_data_reactive()
+
     plot_projection_graph(
-      data_hist       = data_hist,
-      data_proj       = data_proj_final,
+      data_hist       = data$data_hist,
+      data_proj       = data$data_proj,
       scenario_choisi = input$proj_input_scenario,
-      titre           = titre,
-      offset_val      = offset
+      titre           = data$titre,
+      offset_val      = data$offset
     )
   })
 

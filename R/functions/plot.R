@@ -242,7 +242,6 @@ plot_projection_graph <- function(data_hist,
     theme_minimal(base_size = 14) +
     labs(
       title    = paste("Trajectoire :", titre),
-      subtitle = paste("Ajustement (biais) appliqué :", round(offset_val, 1), "°C"),
       y        = "Température (°C)",
       x        = NULL,
       color    = "Scénario",

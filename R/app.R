@@ -152,8 +152,6 @@ ui <- page_navbar(
         col_widths = c(9, 3),
         card(
           full_screen = TRUE,
-          card_header("Visualisation des données historiques"),
-          textOutput("sit_text_info"),
           plotOutput("sit_plot_history", height = "500px") %>% withSpinner(color = "#3498db", type = 6)
         ),
         tagList(
@@ -281,7 +279,7 @@ ui <- page_navbar(
       layout_columns(
         col_widths = c(9, 3),
         card(
-          card_header("Trajectoire de température"),
+          full_screen = TRUE,
           plotOutput("proj_plot_trajectory", height = "500px") %>% withSpinner(color = "#3498db", type = 6)
         ),
         tagList(

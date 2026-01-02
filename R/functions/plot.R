@@ -32,8 +32,8 @@ plot_temp <- function(data,
         
         theme_minimal(base_size = 14) +
         labs(
-          title = paste("🌡️ Évolution Complète :", titre_geo),
-          subtitle = paste("Vue :", granularite_temps),
+          title = paste("Analyse détaillée des températures :", titre_geo),
+          subtitle = paste("Fréquence :", granularite_temps),
           y = "Température (°C)",
           x = NULL,
           color = "Indicateur",
@@ -77,8 +77,8 @@ plot_temp <- function(data,
   p + geom_line(color = "#2980b9", linewidth = 1.2) +
     theme_minimal(base_size = 14) +
     labs(
-      title = paste("🌡️ Évolution :", titre_geo),
-      subtitle = paste("Vue :", granularite_temps),
+      title = paste("Évolution de la température :", titre_geo),
+      subtitle = paste("Fréquence :", granularite_temps),
       y = "Température (°C)",
       x = NULL,
       caption = "Source: Météo-France"
@@ -107,8 +107,8 @@ plot_prec <- function(data, titre_geo = "France", granularite_temps) {
     geom_col(fill = "steelblue") +
     theme_minimal(base_size = 14) +
     labs(
-      title = paste("🌧 Précipitations :", titre_geo),
-      subtitle = paste("Vue :", granularite_temps),
+      title = paste("Cumul des précipitations :", titre_geo),
+      subtitle = paste("Fréquence :", granularite_temps),
       y = "Cumul (mm)",
       x = NULL,
       caption = "Source: Météo-France"
@@ -277,7 +277,7 @@ plot_projection_graph <- function(data_hist,
     geom_vline(xintercept = 2025, linetype = "dotted") +
     theme_minimal(base_size = 14) +
     labs(
-      title    = paste("Trajectoire :", titre),
+      title    = paste("Projections climatiques :", titre),
       y        = "Température (°C)",
       x        = NULL,
       color    = "Scénario",

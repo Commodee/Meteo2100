@@ -5,6 +5,7 @@ library(future)
 library(furrr)
 library(httr)
 library(leaflet)
+library(parallel)
 library(sf)
 library(shiny)
 library(shinycssloaders)
@@ -20,6 +21,7 @@ source("functions/aggregate_meteo.R")
 source("functions/climate_data_downloader.R")
 source("functions/plot.R")
 source("functions/projections_loader.R")
+source("functions/ui_helpers.R")
 
 
 # ui ----------------------------------------------------------------------
@@ -578,106 +580,19 @@ server <- function(input, output, session) {
   # Indicateur Max (Situation)
   output$sit_info_max <- renderUI({
     res <- sit_data_reactive()
-    data <- res$data
-    col <- res$col_var
-    
-    # Trouver le max
-    row_max <- data %>% filter(!!sym(col) == max(!!sym(col), na.rm = TRUE)) %>% slice(1)
-    val_max <- row_max[[col]]
-    date_max <- row_max$periode
-    
-    # Formatage date
-    date_fmt <- switch(input$sit_input_temporal_scale,
-      "jour" = format(date_max, "%d/%m/%Y"),
-      "mois" = format(date_max, "%m/%Y"),
-      "annee" = format(date_max, "%Y")
-    )
-    
-    is_temp <- input$sit_input_var_type == "Temperature"
-    unit <- if(is_temp) "°C" else "mm"
-    
-    bg_color <- if(is_temp) {
-       "linear-gradient(135deg, #e74c3c 0%, #c0392b 100%)" # Rouge
-    } else {
-       "linear-gradient(135deg, #3498db 0%, #2980b9 100%)" # Bleu
-    }
-    
-    title_card <- if(is_temp) "Record de Chaleur" else "Record de Pluie"
-
-    div(
-      class = "info-card",
-      style = paste0("background: ", bg_color, ";"),
-      div(class = "info-card-title", title_card),
-      div(class = "info-card-value", paste0(round(val_max, 1), " ", unit)),
-      div(class = "info-card-desc", date_fmt)
-    )
+    create_info_card(res$data, res$col_var, "max", input$sit_input_var_type, input$sit_input_temporal_scale)
   })
 
   # Indicateur Min (Situation)
   output$sit_info_min <- renderUI({
     res <- sit_data_reactive()
-    data <- res$data
-    col <- res$col_var
-    
-    # Trouver le min
-    row_min <- data %>% filter(!!sym(col) == min(!!sym(col), na.rm = TRUE)) %>% slice(1)
-    val_min <- row_min[[col]]
-    date_min <- row_min$periode
-    
-    # Formatage date
-    date_fmt <- switch(input$sit_input_temporal_scale,
-      "jour" = format(date_min, "%d/%m/%Y"),
-      "mois" = format(date_min, "%m/%Y"),
-      "annee" = format(date_min, "%Y")
-    )
-    
-    is_temp <- input$sit_input_var_type == "Temperature"
-    unit <- if(is_temp) "°C" else "mm"
-    
-    bg_color <- if(is_temp) {
-       "linear-gradient(135deg, #3498db 0%, #2980b9 100%)" # Bleu
-    } else {
-       "linear-gradient(135deg, #f39c12 0%, #d35400 100%)" # Orange/Sec
-    }
-    
-    title_card <- if(is_temp) "Record de Froid" else "Record de Sécheresse"
-
-    div(
-      class = "info-card",
-      style = paste0("background: ", bg_color, ";"),
-      div(class = "info-card-title", title_card),
-      div(class = "info-card-value", paste0(round(val_min, 1), " ", unit)),
-      div(class = "info-card-desc", date_fmt)
-    )
+    create_info_card(res$data, res$col_var, "min", input$sit_input_var_type, input$sit_input_temporal_scale)
   })
 
   # Indicateur Moyenne/Cumul (Situation)
   output$sit_info_mean <- renderUI({
     res <- sit_data_reactive()
-    data <- res$data
-    col <- res$col_var
-    
-    is_temp <- input$sit_input_var_type == "Temperature"
-    
-    if (is_temp) {
-      val_moy <- mean(data[[col]], na.rm = TRUE)
-      title_card <- "Moyenne Période"
-      unit <- "°C"
-    } else {
-      val_moy <- sum(data[[col]], na.rm = TRUE)
-      title_card <- "Cumul Total"
-      unit <- "mm"
-    }
-    
-    bg_color <- "linear-gradient(135deg, #2ecc71 0%, #1abc9c 100%)" # Vert
-    
-    div(
-      class = "info-card",
-      style = paste0("background: ", bg_color, ";"),
-      div(class = "info-card-title", title_card),
-      div(class = "info-card-value", paste0(round(val_moy, 1), " ", unit)),
-      div(class = "info-card-desc", "Sur la période sélectionnée")
-    )
+    create_info_card(res$data, res$col_var, "mean", input$sit_input_var_type, input$sit_input_temporal_scale)
   })
 
   # ---- Tab Carte ----
@@ -858,91 +773,19 @@ server <- function(input, output, session) {
   # Indicateur Max
   output$map_info_max <- renderUI({
     res <- map_data_reactive()
-    data <- res$data
-    col <- res$col_var
-
-    # Trouver le max
-    row_max <- data %>%
-      filter(!!sym(col) == max(!!sym(col), na.rm = TRUE)) %>%
-      slice(1)
-    val_max <- row_max[[col]]
-    nom_max <- row_max[[res$key]]
-
-    is_temp <- input$map_input_var_type == "Temperature"
-    unit <- if (is_temp) "°C" else "mm"
-
-    # Style
-    bg_color <- if (is_temp) {
-      "linear-gradient(135deg, #e74c3c 0%, #c0392b 100%)" # Rouge
-    } else {
-      "linear-gradient(135deg, #3498db 0%, #2980b9 100%)" # Bleu
-    }
-
-    title_card <- if (is_temp) "Le plus chaud" else "Le plus pluvieux"
-
-    div(
-      class = "info-card",
-      style = paste0("background: ", bg_color, ";"),
-      div(class = "info-card-title", title_card),
-      div(class = "info-card-value", paste0(round(val_max, 1), " ", unit)),
-      div(class = "info-card-desc", nom_max)
-    )
+    create_info_card(res$data, res$col_var, "max", input$map_input_var_type, key_col = res$key)
   })
 
   # Indicateur Min
   output$map_info_min <- renderUI({
     res <- map_data_reactive()
-    data <- res$data
-    col <- res$col_var
-
-    # Trouver le min
-    row_min <- data %>%
-      filter(!!sym(col) == min(!!sym(col), na.rm = TRUE)) %>%
-      slice(1)
-    val_min <- row_min[[col]]
-    nom_min <- row_min[[res$key]]
-
-    is_temp <- input$map_input_var_type == "Temperature"
-    unit <- if (is_temp) "°C" else "mm"
-
-    # Style
-    bg_color <- if (is_temp) {
-      "linear-gradient(135deg, #3498db 0%, #2980b9 100%)" # Bleu
-    } else {
-      "linear-gradient(135deg, #f39c12 0%, #d35400 100%)" # Orange/Sec
-    }
-
-    title_card <- if (is_temp) "Le plus froid" else "Le plus sec"
-
-    div(
-      class = "info-card",
-      style = paste0("background: ", bg_color, ";"),
-      div(class = "info-card-title", title_card),
-      div(class = "info-card-value", paste0(round(val_min, 1), " ", unit)),
-      div(class = "info-card-desc", nom_min)
-    )
+    create_info_card(res$data, res$col_var, "min", input$map_input_var_type, key_col = res$key)
   })
 
   # Indicateur Moyenne Nationale
   output$map_info_mean <- renderUI({
     res <- map_data_reactive()
-
-    # On calcule la moyenne (France Métropolitaine)
-    col <- res$col_var
-    val_moy <- mean(res$data[[col]], na.rm = TRUE)
-
-    is_temp <- input$map_input_var_type == "Temperature"
-    unit <- if (is_temp) "°C" else "mm"
-
-    bg_color <- "linear-gradient(135deg, #2ecc71 0%, #1abc9c 100%)" # Vert
-
-    div(
-      class = "info-card",
-      style = paste0("background: ", bg_color, ";"),
-      div(class = "info-card-title", "Moyenne Nationale"),
-      div(class = "info-card-value", paste0(round(val_moy, 1), " ", unit)),
-      div(class = "info-card-desc", "France Métropolitaine")
-    )
+    create_info_card(res$data, res$col_var, "mean", input$map_input_var_type, key_col = res$key)
   })
 
   # ---- Tab Demain ----
@@ -1182,7 +1025,7 @@ server <- function(input, output, session) {
             mode = "full",
             output_dir = parquet_dir,
             parallel = TRUE,
-            n_cores = 4,
+            n_cores = parallel::detectCores(logical = FALSE) - 1,
             verbose = FALSE
           )
         }

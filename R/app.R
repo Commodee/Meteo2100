@@ -208,7 +208,9 @@ ui <- page_navbar(
               inputId = "map_input_temporal_scale",
               label = "Temporalité",
               choices = c(
-                "Jour  (Attention, le graphique peut mettre du temps a apparaitre)" = "jour"
+                "Jour" = "jour",
+                "Mois" = "mois",
+                "Année" = "annee"
               ),
               selected = "jour"
             ),
@@ -353,21 +355,17 @@ server <- function(input, output, session) {
 
   # Préparation des vecteurs de choix
   vec_dep <- reactive({
-    global_data_reactive()$meteo %>%
-      select(NOM_DEPT, CODE_DEPT) %>%
-      distinct(NOM_DEPT, CODE_DEPT) %>%
-      collect() %>%
-      arrange(CODE_DEPT) %>%
-      pull(NOM_DEPT)
+    global_data_reactive()$meteo_departementale %>%
+      pull(NOM_DEPT) %>%
+      unique() %>%
+      sort()
   })
 
   vec_region <- reactive({
-    global_data_reactive()$meteo %>%
-      arrange(NOM_REGION) %>%
-      select(NOM_REGION) %>%
-      distinct(NOM_REGION) %>%
-      collect() %>%
-      pull(NOM_REGION)
+    global_data_reactive()$meteo_regionale %>%
+      pull(NOM_REGION) %>%
+      unique() %>%
+      sort()
   })
 
   vec_commune <- reactive({
@@ -598,7 +596,7 @@ server <- function(input, output, session) {
         view = "months",
         minView = "days",
         dateFormat = "dd/MM/yyyy",
-        value = "2025-12-01"
+        value = "2025-01-01"
       )
     }
   })
@@ -620,6 +618,18 @@ server <- function(input, output, session) {
       map_geo <- global_data_reactive()$departements
       data_meteo <- global_data_reactive()$meteo_departementale
       key_col <- "NOM_DEPT"
+
+      # Patch pour la Corse : Duplication de "Corse" vers "Corse-du-Sud" et "Haute-Corse"
+      if ("Corse" %in% data_meteo$NOM_DEPT) {
+        corse_data <- data_meteo %>% filter(NOM_DEPT == "Corse")
+
+        corse_2a <- corse_data %>% mutate(NOM_DEPT = "Corse-du-Sud")
+        corse_2b <- corse_data %>% mutate(NOM_DEPT = "Haute-Corse")
+
+        data_meteo <- data_meteo %>%
+          filter(NOM_DEPT != "Corse") %>%
+          bind_rows(corse_2a, corse_2b)
+      }
     } else {
       map_geo <- global_data_reactive()$regions
       data_meteo <- global_data_reactive()$meteo_regionale
@@ -917,7 +927,7 @@ server <- function(input, output, session) {
         if (!is.null(ref_geo)) {
           download_meteo_multi_parquet(
             departements = ref_geo$CODE_DEPT,
-            mode = "light",
+            mode = "full",
             output_dir = parquet_dir,
             parallel = TRUE,
             n_cores = 4,

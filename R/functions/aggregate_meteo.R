@@ -33,7 +33,9 @@ aggregate_meteo <- function(data,
       TN = as.numeric(TN),
       TX = as.numeric(TX),
       RR = as.numeric(RR),
-      DATE = as.Date(DATE)
+      DATE = as.Date(DATE),
+      NOM_REGION = if_else(CODE_DEPT == "20", "Corse", NOM_REGION),
+      NOM_DEPT = if_else(CODE_DEPT == "20", "Corse", NOM_DEPT)
     )
   
   # --- ÉTAPE 1 : AGRÉGATION SPATIALE (Moyenne par Jour et par Zone) ---

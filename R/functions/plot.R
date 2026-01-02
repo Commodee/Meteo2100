@@ -157,16 +157,20 @@ plot_map_leaflet <- function(data_map,
   )
 
   # 3. Construction de la carte
+  # Créer des variables locales pour éviter les problèmes avec get() dans les formules leaflet
+  data_map$val_to_plot <- data_map[[col_val]]
+  data_map$label_region <- data_map[[col_name_region]]
+
   leaflet(data_map) %>%
     addProviderTiles(providers$CartoDB.Positron) %>%
     addPolygons(
-      fillColor = ~ pal(get(col_val)),
+      fillColor = ~ pal(val_to_plot),
       color = "#2c3e50",
       weight = 1,
       opacity = 1,
       fillOpacity = 0.6,
       # Tooltip dynamique : Nom + Valeur + Unité
-      label = ~ paste0(get(col_name_region), ": ", round(get(col_val), 1), " ", unit_label),
+      label = ~ paste0(label_region, ": ", round(val_to_plot, 1), " ", unit_label),
       highlightOptions = highlightOptions(
         weight = 3,
         color = "#e74c3c",

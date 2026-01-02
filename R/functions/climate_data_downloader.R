@@ -246,7 +246,7 @@ process_department <- function(dept, all_resources, mode, annee, output_dir, ref
   pattern_dept <- paste0("departement_", search_dept, "_")
   dept_res <- all_resources %>%
     filter(
-      str_detect(titre, fixed(pattern_dept, ignore_case = TRUE)),
+      str_detect(titre, regex(pattern_dept, ignore_case = TRUE)),
       str_detect(titre, "RR-T-Vent")
     )
 

@@ -34,7 +34,7 @@ Un module dédié permet de mettre à jour les données météorologiques récen
 
 ---
 
-## 🛠️ Installation
+## Installation
 
 1.  Assurez-vous d'avoir **R** et **RStudio** installés.
 2.  Installez les dépendances nécessaires via la console R :

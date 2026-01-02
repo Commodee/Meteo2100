@@ -1,6 +1,8 @@
 # load libraries ----------------------------------------------------------
 library(arrow)
 library(bslib)
+library(future)
+library(furrr)
 library(httr)
 library(leaflet)
 library(sf)
@@ -107,12 +109,20 @@ ui <- page_navbar(
       ),
       # sidebar
 
-      card(
-        full_screen = TRUE,
-        card_header("Visualisation des données historiques"),
-        textOutput("sit_text_info"),
-        plotOutput("sit_plot_history", height = "500px") %>% withSpinner(color = "#3498db", type = 6)
-      ) # card
+      layout_columns(
+        col_widths = c(9, 3),
+        card(
+          full_screen = TRUE,
+          card_header("Visualisation des données historiques"),
+          textOutput("sit_text_info"),
+          plotOutput("sit_plot_history", height = "500px") %>% withSpinner(color = "#3498db", type = 6)
+        ),
+        tagList(
+          card(card_header("Info 1"), "Contenu vide", style = "height: 150px;"),
+          card(card_header("Info 2"), "Contenu vide", style = "height: 150px;"),
+          card(card_header("Info 3"), "Contenu vide", style = "height: 150px;")
+        )
+      ) # layout_columns
     ) # layout_sidebar
   ),
   # tab_situation
@@ -169,11 +179,19 @@ ui <- page_navbar(
       ),
       # sidebar
 
-      card(
-        full_screen = TRUE,
-        card_header("Exploration Cartographique"),
-        card_body(padding = 0, leafletOutput("map_output_leaflet", height = "500px") %>% withSpinner(color = "#3498db", type = 6))
-      ) # card
+      layout_columns(
+        col_widths = c(9, 3),
+        card(
+          full_screen = TRUE,
+          card_header("Exploration Cartographique"),
+          card_body(padding = 0, leafletOutput("map_output_leaflet", height = "500px") %>% withSpinner(color = "#3498db", type = 6))
+        ),
+        tagList(
+          card(card_header("Info 1"), "Contenu vide", style = "height: 150px;"),
+          card(card_header("Info 2"), "Contenu vide", style = "height: 150px;"),
+          card(card_header("Info 3"), "Contenu vide", style = "height: 150px;")
+        )
+      ) # layout_columns
     ) # layout_sidebar
   ),
   # tab_carte
@@ -219,11 +237,19 @@ ui <- page_navbar(
       ),
       # sidebar
 
-      card(
-        card_header("Trajectoire de température"),
-        plotOutput("proj_plot_trajectory", height = "500px") %>% withSpinner(color = "#3498db", type = 6),
-        wellPanel(h4("Détails du scénario"), textOutput("proj_text_scenario_desc"))
-      ) # card
+      layout_columns(
+        col_widths = c(9, 3),
+        card(
+          card_header("Trajectoire de température"),
+          plotOutput("proj_plot_trajectory", height = "500px") %>% withSpinner(color = "#3498db", type = 6),
+          wellPanel(h4("Détails du scénario"), textOutput("proj_text_scenario_desc"))
+        ),
+        tagList(
+          card(card_header("Info 1"), "Contenu vide", style = "height: 150px;"),
+          card(card_header("Info 2"), "Contenu vide", style = "height: 150px;"),
+          card(card_header("Info 3"), "Contenu vide", style = "height: 150px;")
+        )
+      ) # layout_columns
     ) # layout_sidebar
   ),
   # tab_demain

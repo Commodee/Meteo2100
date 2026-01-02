@@ -213,9 +213,6 @@ download_meteo_multi_parquet <- function(departements,
 
   # === MODE PARALLÈLE ===
   if (parallel && length(departements) > 1) {
-    library(future)
-    library(furrr)
-
     plan(multisession, workers = min(n_cores, length(departements)))
 
     log_msg(paste("Mode PARALLÈLE activé :", n_cores, "cœurs"), verbose = verbose)

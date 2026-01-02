@@ -157,9 +157,9 @@ ui <- page_navbar(
           plotOutput("sit_plot_history", height = "500px") %>% withSpinner(color = "#3498db", type = 6)
         ),
         tagList(
-          card(card_header("Info 1"), "Contenu vide", style = "height: 150px;"),
-          card(card_header("Info 2"), "Contenu vide", style = "height: 150px;"),
-          card(card_header("Info 3"), "Contenu vide", style = "height: 150px;")
+          uiOutput("sit_info_max", style = "height: 180px; margin-bottom: 15px;"),
+          uiOutput("sit_info_min", style = "height: 180px; margin-bottom: 15px;"),
+          uiOutput("sit_info_mean", style = "height: 180px; margin-bottom: 15px;")
         )
       ) # layout_columns
     ) # layout_sidebar
@@ -417,7 +417,13 @@ server <- function(input, output, session) {
         checkIcon = list(yes = icon("check"))
       )
     } else {
-      NULL
+      div(
+        class = "alert alert-info",
+        style = "margin-top: 10px; font-size: 0.9em;",
+        icon("info-circle"),
+        tags$b("Note méthodologique :"), br(),
+        "Les valeurs affichées correspondent à la moyenne des précipitations sur le territoire, cumulées selon la fréquence temporelle choisie."
+      )
     }
   })
 
@@ -465,8 +471,8 @@ server <- function(input, output, session) {
     }
   })
 
-  # plot
-  output$sit_plot_history <- renderPlot({
+  # Reactive pour les données de situation
+  sit_data_reactive <- reactive({
     req(
       input$sit_input_scale,
       input$sit_input_date_range,
@@ -530,19 +536,149 @@ server <- function(input, output, session) {
 
     # 2. Ré-agrégation Temporelle (si besoin)
     data_ready <- reaggregate_tempo(data_filtered, input$sit_input_temporal_scale)
+    
+    # Détermination de la colonne à utiliser
+    col_var <- if (input$sit_input_var_type == "Temperature") {
+      req(input$sit_input_temp_metric)
+      switch(input$sit_input_temp_metric,
+        "Max" = "Temperature_max",
+        "Min" = "Temperature_min",
+        "Moy" = "Temperature_moyenne",
+        "3-en-1" = "Temperature_moyenne", # Par défaut pour les indicateurs
+        "Temperature_moyenne"
+      )
+    } else {
+      "Precipitation_mm_moy"
+    }
 
+    list(
+      data = data_ready,
+      titre = titre,
+      col_var = col_var
+    )
+  })
+
+  # plot
+  output$sit_plot_history <- renderPlot({
+    res <- sit_data_reactive()
+    
     # 3. Plot
     if (input$sit_input_var_type == "Temperature") {
       req(input$sit_input_temp_metric)
       plot_temp(
-        data_ready,
-        titre,
+        res$data,
+        res$titre,
         input$sit_input_temporal_scale,
         input$sit_input_temp_metric
       )
     } else {
-      plot_prec(data_ready, titre, input$sit_input_temporal_scale)
+      plot_prec(res$data, res$titre, input$sit_input_temporal_scale)
     }
+  })
+
+  # Indicateur Max (Situation)
+  output$sit_info_max <- renderUI({
+    res <- sit_data_reactive()
+    data <- res$data
+    col <- res$col_var
+    
+    # Trouver le max
+    row_max <- data %>% filter(!!sym(col) == max(!!sym(col), na.rm = TRUE)) %>% slice(1)
+    val_max <- row_max[[col]]
+    date_max <- row_max$periode
+    
+    # Formatage date
+    date_fmt <- switch(input$sit_input_temporal_scale,
+      "jour" = format(date_max, "%d/%m/%Y"),
+      "mois" = format(date_max, "%m/%Y"),
+      "annee" = format(date_max, "%Y")
+    )
+    
+    is_temp <- input$sit_input_var_type == "Temperature"
+    unit <- if(is_temp) "°C" else "mm"
+    
+    bg_color <- if(is_temp) {
+       "linear-gradient(135deg, #e74c3c 0%, #c0392b 100%)" # Rouge
+    } else {
+       "linear-gradient(135deg, #3498db 0%, #2980b9 100%)" # Bleu
+    }
+    
+    title_card <- if(is_temp) "Record de Chaleur" else "Record de Pluie"
+
+    div(
+      class = "info-card",
+      style = paste0("background: ", bg_color, ";"),
+      div(class = "info-card-title", title_card),
+      div(class = "info-card-value", paste0(round(val_max, 1), " ", unit)),
+      div(class = "info-card-desc", date_fmt)
+    )
+  })
+
+  # Indicateur Min (Situation)
+  output$sit_info_min <- renderUI({
+    res <- sit_data_reactive()
+    data <- res$data
+    col <- res$col_var
+    
+    # Trouver le min
+    row_min <- data %>% filter(!!sym(col) == min(!!sym(col), na.rm = TRUE)) %>% slice(1)
+    val_min <- row_min[[col]]
+    date_min <- row_min$periode
+    
+    # Formatage date
+    date_fmt <- switch(input$sit_input_temporal_scale,
+      "jour" = format(date_min, "%d/%m/%Y"),
+      "mois" = format(date_min, "%m/%Y"),
+      "annee" = format(date_min, "%Y")
+    )
+    
+    is_temp <- input$sit_input_var_type == "Temperature"
+    unit <- if(is_temp) "°C" else "mm"
+    
+    bg_color <- if(is_temp) {
+       "linear-gradient(135deg, #3498db 0%, #2980b9 100%)" # Bleu
+    } else {
+       "linear-gradient(135deg, #f39c12 0%, #d35400 100%)" # Orange/Sec
+    }
+    
+    title_card <- if(is_temp) "Record de Froid" else "Record de Sécheresse"
+
+    div(
+      class = "info-card",
+      style = paste0("background: ", bg_color, ";"),
+      div(class = "info-card-title", title_card),
+      div(class = "info-card-value", paste0(round(val_min, 1), " ", unit)),
+      div(class = "info-card-desc", date_fmt)
+    )
+  })
+
+  # Indicateur Moyenne/Cumul (Situation)
+  output$sit_info_mean <- renderUI({
+    res <- sit_data_reactive()
+    data <- res$data
+    col <- res$col_var
+    
+    is_temp <- input$sit_input_var_type == "Temperature"
+    
+    if (is_temp) {
+      val_moy <- mean(data[[col]], na.rm = TRUE)
+      title_card <- "Moyenne Période"
+      unit <- "°C"
+    } else {
+      val_moy <- sum(data[[col]], na.rm = TRUE)
+      title_card <- "Cumul Total"
+      unit <- "mm"
+    }
+    
+    bg_color <- "linear-gradient(135deg, #2ecc71 0%, #1abc9c 100%)" # Vert
+    
+    div(
+      class = "info-card",
+      style = paste0("background: ", bg_color, ";"),
+      div(class = "info-card-title", title_card),
+      div(class = "info-card-value", paste0(round(val_moy, 1), " ", unit)),
+      div(class = "info-card-desc", "Sur la période sélectionnée")
+    )
   })
 
   # ---- Tab Carte ----

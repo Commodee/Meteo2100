@@ -298,11 +298,11 @@ ui <- page_navbar(
     icon = icon("sync"),
     card(
       card_header("Mise à jour des données météorologiques"),
-      p("Les données de base (Hugging Face) s'arrêtent au 27/11/2025."),
-      p("Pour obtenir les données les plus récentes (2024-202x), vous pouvez lancer une mise à jour."),
+      p("Les données de base (Hugging Face) s'arrêtent au 02/01/2026."),
+      p("Pour obtenir les données les plus récentes (2025-2026), vous pouvez lancer une mise à jour."),
       p("Cette opération va :"),
       tags$ul(
-        tags$li("Supprimer les fichiers Parquet existants pour la période 2024-202x."),
+        tags$li("Supprimer les fichiers Parquet existants pour la période 2025-2026."),
         tags$li("Télécharger les dernières données disponibles depuis data.gouv.fr."),
         tags$li("Recalculer les agrégations (fichiers RDS).")
       ),
@@ -313,7 +313,8 @@ ui <- page_navbar(
 
   # footer ----
   footer = tags$footer(style = "background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); text-align: center; font-size: 0.9em; color: white;", p(
-    "Fait par : Victor Frison • Adrien Mathier • Jonas Carlu"
+    "Fait par : Victor Frison • Adrien Mathier • Jonas Carlu",
+    style = "margin: 0; padding: 10px;"
   ))
 )
 

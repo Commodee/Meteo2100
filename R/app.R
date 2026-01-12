@@ -315,7 +315,7 @@ ui <- page_navbar(
 
   # footer ----
   footer = tags$footer(style = "background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); text-align: center; font-size: 0.9em; color: white;", p(
-    "Fait par : Victor Frison • Adrien Mathier • Jonas Carlu",
+    "Fait par : Victor Frison • Adrien Mathieu • Jonas Carlu",
     style = "margin: 0; padding: 10px;"
   ))
 )

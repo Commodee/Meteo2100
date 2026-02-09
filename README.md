@@ -36,6 +36,8 @@ Un module dédié permet de mettre à jour les données météorologiques récen
 
 ## Installation
 
+⚠️ **Prérequis** : L'application télécharge environ **600 Mo** de données au premier lancement. Assurez-vous d'avoir suffisamment d'espace disque disponible.
+
 1.  Assurez-vous d'avoir **R** et **RStudio** installés.
 2.  Installez les dépendances nécessaires via la console R :
 
@@ -60,6 +62,15 @@ ou pour lancer l'application directement depuis la console R :
 ```r
 shiny::runApp('R')
 ```
+
+### En cas de problème de téléchargement
+
+Si le téléchargement est interrompu (par exemple à cause d'un manque d'espace disque), l'application peut planter au redémarrage car les fichiers sont incomplets ou corrompus.
+
+**Solution :**
+1.  Supprimez **manuellement** tout le contenu du dossier `data/`.
+2.  Assurez-vous d'avoir suffisamment d'espace disque (~600 Mo min).
+3.  Relancez l'application pour redémarrer le téléchargement proprement.
 
 ---
 

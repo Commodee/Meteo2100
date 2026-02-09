@@ -16,31 +16,37 @@
 #' global_data <- load_raw_data()
 #' }
 load_raw_data <- function() {
+  start_time <- Sys.time()
+  cat(paste0("[", start_time, "] Début du chargement des données...\n"))
+
   # 1. Configuration des chemins
   data_dir <- "../data"
   parquet_dir <- file.path(data_dir, "meteo_parquet")
-  
+
   # Vérification dossier Data
   if (!dir.exists(data_dir)) {
     dir.create(data_dir, recursive = TRUE)
     message("Dossier 'data' créé.")
   }
-  
+
   # 2. Gestion des Données Météo (Parquet)
   # Si le dossier n'existe pas, on télécharge et dézippe
+  cat(paste0("[", Sys.time(), "] Vérification des données météo (Parquet)...\n"))
   if (!dir.exists(parquet_dir)) {
     message("Données météo introuvables. Téléchargement depuis HuggingFace...")
-    
-    
+
+
     zip_url <- "https://huggingface.co/datasets/meteo2100/meteo2100/resolve/main/meteo_parquet.zip?download=true"
     dest_zip <- file.path(data_dir, "meteo_parquet.zip")
-    
+
     tryCatch({
-      response <- GET(zip_url,
-                      write_disk(dest_zip, overwrite = TRUE),
-                      progress(),
-                      timeout(600))
-      
+      response <- GET(
+        zip_url,
+        write_disk(dest_zip, overwrite = TRUE),
+        progress(),
+        timeout(600)
+      )
+
       if (status_code(response) == 200) {
         message("Décompression de l'archive...")
         unzip(dest_zip, exdir = data_dir)
@@ -51,18 +57,19 @@ load_raw_data <- function() {
           status_code(response)
         ))
       }
-      
     }, error = function(e) {
       stop("Erreur critique lors du téléchargement : ", e$message)
     }, finally = {
-      if (file.exists(dest_zip))
+      if (file.exists(dest_zip)) {
         unlink(dest_zip)
+      }
     })
   }
-  
+
   # Chargement des parquets avec arrow
   data_meteo_arrow <- arrow::open_dataset(parquet_dir)
-  
+  cat(paste0("[", Sys.time(), "] Données Météo chargées (Arrow).\n"))
+
   # Sous fonction
   load_or_create_rds <- function(file_name, create_func) {
     path <- file.path(data_dir, file_name)
@@ -76,60 +83,71 @@ load_raw_data <- function() {
       return(data)
     }
   }
-  
+
   # 3. Gestion DRIAS
+  cat(paste0("[", Sys.time(), "] Chargement des projections DRIAS...\n"))
   dest_txt <- file.path(data_dir, "prevision_DRIAS.txt")
   if (!file.exists(dest_txt)) {
     message("Téléchargement des projections DRIAS...")
-    tryCatch({
-      resp <- GET(
-        "https://huggingface.co/datasets/torvikk/meteo2100/resolve/main/prevision_DRIAS.txt?download=true",
-        write_disk(dest_txt, overwrite = TRUE),
-        progress(),
-        timeout(60)
-      )
-      if (status_code(resp) != 200)
-        stop("Erreur 404/401 sur l'URL DRIAS")
-    }, error = function(e) {
-      warning("Impossible de télécharger DRIAS. Vérifiez l'URL dans data_loader.R")
-      return(data.frame(
-        Contexte = character(),
-        annee = numeric(),
-        Temp_moy = numeric()
-      ))
-    })
+    tryCatch(
+      {
+        resp <- GET(
+          "https://huggingface.co/datasets/torvikk/meteo2100/resolve/main/prevision_DRIAS.txt?download=true",
+          write_disk(dest_txt, overwrite = TRUE),
+          progress(),
+          timeout(60)
+        )
+        if (status_code(resp) != 200) {
+          stop("Erreur 404/401 sur l'URL DRIAS")
+        }
+      },
+      error = function(e) {
+        warning("Impossible de télécharger DRIAS. Vérifiez l'URL dans data_loader.R")
+        return(data.frame(
+          Contexte = character(),
+          annee = numeric(),
+          Temp_moy = numeric()
+        ))
+      }
+    )
   }
   drias_data <- process_drias_projections(dest_txt)
-  
+
   # 4. Gestion Carte
+  cat(paste0("[", Sys.time(), "] Chargement des fonds de carte...\n"))
   # Chargement Régions
   france_regions <- load_or_create_rds("regions.rds", function() {
     url <- "https://raw.githubusercontent.com/gregoiredavid/france-geojson/master/regions.geojson"
     st_read(url, quiet = TRUE) %>% rename(NOM_REGION = nom)
   })
-  
+
   # Chargement Départements
   france_departements <- load_or_create_rds("departements.rds", function() {
     url <- "https://raw.githubusercontent.com/gregoiredavid/france-geojson/master/departements.geojson"
     st_read(url, quiet = TRUE) %>% rename(NOM_DEPT = nom)
   })
-  
-  #5. Gestion aggregation
+
+  # 5. Gestion aggregation
+  cat(paste0("[", Sys.time(), "] Chargement/Calcul des agrégats météo...\n"))
   # Aggregation France
   meteo_nationale <- load_or_create_rds("meteo_nationale.rds", function() {
     aggregate_meteo(data_meteo_arrow, "jour", "Nationale")
   })
-  
+
   # Aggregation Régionale
   meteo_regionale <- load_or_create_rds("meteo_regionale.rds", function() {
     aggregate_meteo(data_meteo_arrow, "jour", "Régionale")
   })
-  
+
   # Aggregation Départementale
   meteo_departementale <- load_or_create_rds("meteo_departementale.rds", function() {
     aggregate_meteo(data_meteo_arrow, "jour", "Départementale")
   })
-  
+
+  end_time <- Sys.time()
+  total_duration <- round(difftime(end_time, start_time, units = "secs"), 2)
+  cat(paste0("[", end_time, "] Chargement terminé avec succès. Durée totale : ", total_duration, " secondes.\n"))
+
   return(
     list(
       regions = france_regions,
